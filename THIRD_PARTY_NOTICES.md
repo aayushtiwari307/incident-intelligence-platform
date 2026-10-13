@@ -1,0 +1,24 @@
+# Third-party notices
+
+## Reference project: ai-incident-intelligence
+
+Parts of this repository were adapted from <https://github.com/julmtoz/ai-incident-intelligence>
+(MIT, Copyright (c) 2026 Julio Matos). The full licence text is in
+[`LICENSES/reference-ai-incident-intelligence-MIT.txt`](LICENSES/reference-ai-incident-intelligence-MIT.txt)
+and must be kept with any copy of the adapted material.
+
+Items adapted so far (this list is kept truthful and updated as more is reused):
+
+| Here | Adapted from | Change |
+|------|--------------|--------|
+| `docker-compose.yml` healthcheck commands | reference `docker-compose.yml` | new ports (loopback, 5434/6380), required passwords |
+| `.dockerignore` | reference `.dockerignore` | trimmed to this layout |
+| `apps/api/src/common/shutdown.ts` | reference `backend/src/lib/shutdown.ts` | timeout is a parameter |
+| `apps/api/src/config/redact.ts` | reference `sanitizedString` | broadened patterns, URL and key-based redaction |
+
+Everything else (workspace layout, env validation, migration runner, SQL schema, shared schemas, scripts) was written for this project.
+
+## Runtime and development dependencies
+
+Dependencies are distributed under their own licences; see `package-lock.json` once generated and run
+`npx license-checker` locally. A dependency licence audit has **not** been performed yet.

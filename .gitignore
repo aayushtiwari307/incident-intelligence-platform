@@ -1,0 +1,16 @@
+node_modules
+dist/
+build/
+.next/
+coverage/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+.DS_Store
+next-env.d.ts
+
+# Real environment files are never committed. Only *.example files are tracked.
+.env
+.env.*
+!.env.example

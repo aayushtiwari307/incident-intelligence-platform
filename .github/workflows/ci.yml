@@ -1,0 +1,65 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR makes the older run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check:deps
+      - run: npm run check:hygiene
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run build
+      - name: Prepare local-only Compose configuration
+        run: cp .env.example .env
+      - name: Build and start the complete container stack
+        run: |
+          docker compose --profile app config --quiet
+          docker compose --profile app up -d --build --wait
+      - name: Application containers run as a non-root user
+        run: |
+          for service in api web; do
+            uid="$(docker compose --profile app exec -T "$service" id -u)"
+            echo "$service runs as uid $uid"
+            test "$uid" != "0"
+          done
+      - name: Smoke-test the running stack over HTTP (health, web page, auth, incidents, CSRF, session revocation)
+        run: npm run smoke:stack
+      - name: Container logs (only when something failed)
+        if: failure()
+        run: docker compose --profile app logs --no-color --tail=200
+      - name: Stop the stack without deleting volumes
+        if: always()
+        run: docker compose --profile app down --remove-orphans

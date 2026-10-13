@@ -1,0 +1,48 @@
+psql:rls-pooling.sql:5: NOTICE:  database "rls_spike" does not exist, skipping
+--- 1. no tenant context set: must see nothing (fail closed)
+ visible_rows 
+--------------
+            0
+(1 row)
+
+--- 2. set_config(..., is_local = true) inside a transaction: sees only org A
+              set_config              
+--------------------------------------
+ 00000000-0000-0000-0000-00000000000a
+(1 row)
+
+ id |     title      
+----+----------------
+  1 | org A incident
+(1 row)
+
+--- 3. same connection, next transaction: context must be gone (this is what makes pooling safe)
+ leaked_context | visible_rows 
+----------------+--------------
+                |            0
+(1 row)
+
+--- 4. writing a row for another tenant is rejected by WITH CHECK
+              set_config              
+--------------------------------------
+ 00000000-0000-0000-0000-00000000000a
+(1 row)
+
+psql:rls-pooling.sql:38: ERROR:  new row violates row-level security policy for table "incidents"
+--- 5. ANTI-PATTERN: set_config(..., is_local = false) / SET leaks across pooled requests
+              set_config              
+--------------------------------------
+ 00000000-0000-0000-0000-00000000000a
+(1 row)
+
+ still_visible_after_commit 
+----------------------------
+                          1
+(1 row)
+
+--- 6. superuser/BYPASSRLS roles ignore policies: the API must never connect as one
+ superuser_sees 
+----------------
+              2
+(1 row)
+

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "incident-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Real-time incident operations platform. Working title: see docs/decisions/0003-product-name.md",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "npm@10.9.4",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @platform/shared && npm run build -w @platform/api && npm run build -w @platform/web",
+    "typecheck": "npm run build -w @platform/shared && npm run typecheck -w @platform/api && npm run typecheck -w @platform/web",
+    "lint": "eslint .",
+    "test": "node --test \"scripts/*.test.mjs\" && npm run test -w @platform/shared && npm run test -w @platform/api && npm run test -w @platform/web",
+    "test:integration": "npm run test:integration -w @platform/api",
+    "check:deps": "node scripts/check-dependency-duplicates.mjs",
+    "check:hygiene": "node scripts/check-repo-hygiene.mjs",
+    "services:up": "docker compose up -d --wait",
+    "services:app-up": "docker compose --profile app up -d --build --wait",
+    "services:app-down": "docker compose --profile app down",
+    "services:down": "docker compose down",
+    "migrate": "npm run migrate -w @platform/api",
+    "migrate:status": "npm run migrate:status -w @platform/api",
+    "setup:env": "node scripts/setup-env.mjs",
+    "dev:api": "npm run build -w @platform/shared && npm run dev -w @platform/api",
+    "dev:web": "npm run build -w @platform/shared && npm run dev -w @platform/web",
+    "health": "node scripts/check-health.mjs",
+    "smoke:stack": "node scripts/smoke-stack.mjs",
+    "services:reset": "docker compose down -v && docker compose up -d --wait"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/jest": "30.0.0",
+    "@types/node": "22.20.1",
+    "eslint": "9.39.5",
+    "globals": "14.0.0",
+    "jest": "30.5.2",
+    "ts-jest": "29.4.14",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0"
+  },
+  "overrides": {
+    "typescript": "5.9.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "zod": "3.25.76"
+  }
+}
