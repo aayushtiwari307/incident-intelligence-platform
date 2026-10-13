@@ -30,3 +30,15 @@ export function Field({ label, error, children, htmlFor }: { label: string; erro
     </div>
   );
 }
+
+const LIVE_LABEL = { live: "Live", connecting: "Connecting…", reconnecting: "Reconnecting…" } as const;
+
+/** Shows whether pushed updates are flowing. Hidden when offline; the page still works through ordinary requests. */
+export function LiveStatus({ status }: { status: "connecting" | "live" | "reconnecting" | "offline" }) {
+  if (status === "offline") return null;
+  return (
+    <span className={`live live-${status}`} role="status" aria-live="polite" title="Live updates">
+      <span aria-hidden="true">●</span> {LIVE_LABEL[status]}
+    </span>
+  );
+}

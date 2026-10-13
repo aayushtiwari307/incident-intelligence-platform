@@ -87,7 +87,7 @@ you opened is not in `CORS_ORIGINS` (it is also the CSRF allow-list for sign-in,
 incident: an analysis is queued when an incident is created and a responder can re-run it. The worker runs inside the API
 process; look for `job worker started` in the log. Incident text is sent to the provider you configure.
 
-Optional settings in `apps/api/.env`: `SESSION_TTL_HOURS` (default 168), `INVITE_TTL_HOURS` (default 168), `AI_MODEL`, `AI_TIMEOUT_MS`.
+Optional settings in `apps/api/.env`: `SESSION_TTL_HOURS` (default 168), `INVITE_TTL_HOURS` (default 168), `AI_MODEL`, `AI_TIMEOUT_MS`, `REALTIME_ENABLED` (default true) and `REALTIME_REVALIDATE_SECONDS` (default 10).
 
 ## 6. Check health
 
@@ -153,6 +153,12 @@ docker compose --profile app down
 With the containers running, `npm run smoke:stack` exercises the real API and web over HTTP (it registers a throw-away user, so use it only against local/CI stacks). Percent-encode special characters in `POSTGRES_PASSWORD` or avoid them: the compose file interpolates it into `DATABASE_URL`.
 
 Do not use `npm run services:reset` for routine shutdown; it removes Compose volumes and deletes local database data.
+
+## Live updates (Milestone 4)
+
+The API serves Socket.IO on the same port (`/socket.io`, WebSocket only). Open two browser windows at `http://127.0.0.1:3000` signed in to the same organization (a second user can be invited on the Team page), open the incident list in both, create or comment on an incident in one: the other updates without a reload and shows "Live" next to the heading. Do not use `localhost` for one and `127.0.0.1` for the other: the session cookie is host-specific and the socket handshake checks `Origin` against `CORS_ORIGINS`.
+
+After pulling Milestone 4 you must run `npm install` once (it adds `socket.io` and `socket.io-client`; the committed lockfile must be regenerated) and apply migration 0006 (`npm run migrate`, or restart the API with `MIGRATE_ON_START=apply`).
 
 ## Troubleshooting
 

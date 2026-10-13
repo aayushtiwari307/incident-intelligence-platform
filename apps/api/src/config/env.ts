@@ -79,6 +79,8 @@ const envSchema = z.object({
   AI_PROVIDER: z.enum(["none", "openai", "gemini"]).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
+  REALTIME_ENABLED: z.string().optional(),
+  REALTIME_REVALIDATE_SECONDS: envInt(1, 300).optional(),
 });
 
 export type NodeEnv = "development" | "test" | "production";
@@ -111,6 +113,12 @@ export interface AppConfig {
   migrations: { mode: MigrateOnStart };
   logLevel: LogLevel;
   ai: AiConfig;
+  realtime: {
+    /** Socket.IO push updates. Everything works without them (clients keep using the REST API). */
+    enabled: boolean;
+    /** How often live connections are re-checked against the database (bounds how long a revoked session keeps receiving pushes). */
+    revalidateSeconds: number;
+  };
 }
 
 type RawEnv = Record<string, string | undefined>;
@@ -208,6 +216,13 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     }
   }
 
+  let realtimeEnabled = true;
+  if (source.REALTIME_ENABLED !== undefined) {
+    const parsed = parseEnvBoolean(source.REALTIME_ENABLED);
+    if (parsed === undefined) problems.push("REALTIME_ENABLED: must be true or false");
+    else realtimeEnabled = parsed;
+  }
+
   const nodeEnv: NodeEnv = result.success ? (result.data.NODE_ENV ?? "development") : "development";
   const corsOrigins = parseCorsOrigins(source.CORS_ORIGINS, nodeEnv, problems);
 
@@ -237,6 +252,7 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     migrations: { mode: env.MIGRATE_ON_START ?? "check" },
     logLevel: env.LOG_LEVEL ?? "info",
     ai: resolveAi(env),
+    realtime: { enabled: realtimeEnabled, revalidateSeconds: env.REALTIME_REVALIDATE_SECONDS ?? 10 },
   };
 }
 
@@ -256,5 +272,6 @@ export function describeConfig(config: AppConfig): Record<string, unknown> {
     migrations: config.migrations,
     logLevel: config.logLevel,
     ai: { provider: config.ai.provider, enabled: config.ai.enabled, disabledReason: config.ai.disabledReason, model: config.ai.model, timeoutMs: config.ai.timeoutMs },
+    realtime: config.realtime,
   };
 }

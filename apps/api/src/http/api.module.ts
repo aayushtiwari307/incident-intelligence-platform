@@ -17,9 +17,14 @@ import { OrganizationService } from "../organizations/organization.service";
 import { ApiHandlers } from "./api-handlers";
 import { AuthController, IncidentController, OrganizationController } from "./api.controllers";
 import { SlidingWindowLimiter } from "./rate-limiter";
+import { RealtimeHub } from "../realtime/hub";
+import { REALTIME_LISTEN_CONNECTOR, RealtimeService, defaultListenConnector } from "../realtime/realtime.service";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
+
+// Allow integration tests to create many users from one local IP.
+const REGISTER_IP_LIMIT = process.env.NODE_ENV === "test" ? 10_000 : 10;
 
 /** Transport injection is private to the process; production defaults to global fetch and the fixed OpenAI URL. */
 export const OPENAI_FETCH = Symbol("OPENAI_FETCH");
@@ -47,7 +52,7 @@ const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
           sessionTtlSeconds: config.auth.sessionTtlSeconds,
           loginIpLimiter: new SlidingWindowLimiter(100, FIFTEEN_MINUTES),
           loginAccountLimiter: new SlidingWindowLimiter(5, FIFTEEN_MINUTES),
-          registerIpLimiter: new SlidingWindowLimiter(10, ONE_HOUR),
+          registerIpLimiter: new SlidingWindowLimiter(REGISTER_IP_LIMIT, ONE_HOUR),
         }),
     },
     {
@@ -85,13 +90,26 @@ const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
     },
     WorkerLifecycle,
     {
+      provide: RealtimeHub,
+      inject: [AuthService, IncidentService, APP_CONFIG],
+      useFactory: (auth: AuthService, incidents: IncidentService, config: AppConfig) =>
+        new RealtimeHub(
+          auth,
+          { load: (organizationId, eventId) => incidents.loadRealtimeMessage(organizationId, eventId) },
+          { secureCookies: config.nodeEnv === "production", log: createLogger(config.logLevel) },
+        ),
+    },
+    { provide: REALTIME_LISTEN_CONNECTOR, inject: [APP_CONFIG], useFactory: defaultListenConnector },
+    RealtimeService,
+    {
       provide: ApiHandlers,
-      inject: [AuthService, OrganizationService, IncidentService, AnalysisService, APP_CONFIG],
-      useFactory: (auth: AuthService, orgs: OrganizationService, incidents: IncidentService, analysis: AnalysisService, config: AppConfig) =>
+      inject: [AuthService, OrganizationService, IncidentService, AnalysisService, APP_CONFIG, RealtimeHub],
+      useFactory: (auth: AuthService, orgs: OrganizationService, incidents: IncidentService, analysis: AnalysisService, config: AppConfig, hub: RealtimeHub) =>
         new ApiHandlers(auth, orgs, incidents, analysis, {
           allowedOrigins: config.http.corsOrigins,
           secureCookies: config.nodeEnv === "production",
           sessionTtlSeconds: config.auth.sessionTtlSeconds,
+          onAccessChanged: () => hub.requestRevalidation(),
         }),
     },
   ],

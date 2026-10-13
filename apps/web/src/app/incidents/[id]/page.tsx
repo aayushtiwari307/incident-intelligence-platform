@@ -13,10 +13,12 @@ import {
 } from "@platform/shared";
 import { AnalysisPanel } from "../../../components/analysis-panel";
 import { AppShell, useCan } from "../../../components/shell";
-import { Field, FormError, SeverityBadge, StatusBadge } from "../../../components/ui";
+import { Field, FormError, LiveStatus, SeverityBadge, StatusBadge } from "../../../components/ui";
 import { ApiError } from "../../../lib/api-client";
 import { SEVERITY_LABEL, TRANSITION_VERB, describeEvent, errorText, relativeTime } from "../../../lib/format";
+import { acceptSnapshot, mergeTimeline } from "../../../lib/realtime-state";
 import { api } from "../../../lib/session";
+import { useRealtime } from "../../../lib/use-realtime";
 
 export default function IncidentPage() {
   return (
@@ -39,17 +41,30 @@ function IncidentDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const [editing, setEditing] = useState(false);
+  // The version the open edit form was based on. Live updates move `incident.version` forward while the user is typing;
+  // saving must still be checked against what they were editing, or it would silently overwrite a colleague's change.
+  const [editBaseVersion, setEditBaseVersion] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const [inc, tl] = await Promise.all([api.getIncident(id), api.timeline(id)]);
-      setIncident(inc);
-      setEvents(tl);
+      // Never step backwards: a push may already have delivered something newer than this response.
+      setIncident((prev) => acceptSnapshot(prev, inc));
+      setEvents((prev) => mergeTimeline(prev, tl));
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true);
       else setError(errorText(e));
     }
   }, [id]);
+
+  const liveStatus = useRealtime({
+    onEvent: (message) => {
+      if (message.incidentId !== id) return;
+      setIncident((prev) => acceptSnapshot(prev, message.incident));
+      setEvents((prev) => mergeTimeline(prev, [message.event]));
+    },
+    onSync: () => void reload(),
+  });
 
   useEffect(() => {
     void reload();
@@ -99,8 +114,17 @@ function IncidentDetail() {
         <h1>
           <span className="muted">#{incident.number}</span> {incident.title}
         </h1>
+        <LiveStatus status={liveStatus} />
         {canUpdate ? (
-          <button type="button" className="btn secondary" onClick={() => setEditing((v) => !v)} aria-expanded={editing}>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => {
+              setEditBaseVersion(editing ? null : incident.version);
+              setEditing((v) => !v);
+            }}
+            aria-expanded={editing}
+          >
             {editing ? "Cancel edit" : "Edit"}
           </button>
         ) : null}
@@ -119,13 +143,25 @@ function IncidentDetail() {
       ) : null}
 
       {editing ? (
-        <EditForm
-          incident={incident}
-          members={members}
-          onSave={async (input) => {
-            if (await mutate(() => api.updateIncident(incident.id, { expectedVersion: incident.version, ...input }), "Saved.")) setEditing(false);
-          }}
-        />
+        <>
+          {editBaseVersion !== null && incident.version > editBaseVersion ? (
+            <p role="status" className="notice">
+              Someone else changed this incident while you were editing. Saving will be refused so nothing is overwritten; copy your
+              changes, cancel, and edit again.
+            </p>
+          ) : null}
+          <EditForm
+            incident={incident}
+            members={members}
+            onSave={async (input) => {
+              const expectedVersion = editBaseVersion ?? incident.version;
+              if (await mutate(() => api.updateIncident(incident.id, { expectedVersion, ...input }), "Saved.")) {
+                setEditing(false);
+                setEditBaseVersion(null);
+              }
+            }}
+          />
+        </>
       ) : (
         <section aria-labelledby="desc-h">
           <h2 id="desc-h">Description</h2>

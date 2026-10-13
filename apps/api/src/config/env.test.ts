@@ -211,3 +211,24 @@ describe("secrets cannot leak through serialisation", () => {
     assert.ok(text.includes("127.0.0.1:5434"));
   });
 });
+
+describe("real-time configuration", () => {
+  it("is on by default and re-checks connections every 10 seconds", () => {
+    const config = loadConfig(base());
+    assert.deepEqual(config.realtime, { enabled: true, revalidateSeconds: 10 });
+    assert.deepEqual(describeConfig(config).realtime, { enabled: true, revalidateSeconds: 10 });
+  });
+
+  it("can be switched off and tuned", () => {
+    const config = loadConfig(base({ REALTIME_ENABLED: "false", REALTIME_REVALIDATE_SECONDS: "30" }));
+    assert.deepEqual(config.realtime, { enabled: false, revalidateSeconds: 30 });
+  });
+
+  it("refuses an ambiguous REALTIME_ENABLED instead of guessing (the reference's Boolean(string) bug)", () => {
+    assert.ok(problemsOf(base({ REALTIME_ENABLED: "maybe" })).some((p) => p.startsWith("REALTIME_ENABLED:")));
+  });
+
+  it.each(["0", "301", "abc", "1.5"])("refuses REALTIME_REVALIDATE_SECONDS=%s", (value) => {
+    assert.ok(problemsOf(base({ REALTIME_REVALIDATE_SECONDS: value })).some((p) => p.startsWith("REALTIME_REVALIDATE_SECONDS:")));
+  });
+});

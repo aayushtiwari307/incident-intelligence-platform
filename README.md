@@ -1,7 +1,7 @@
 # Incident platform (working title)
 
 Incident operations platform: NestJS API, Next.js web app, PostgreSQL, an optional local Redis service, a PostgreSQL-backed durable job queue, and optional AI assistance.
-Early development. Implemented: accounts and organizations, roles, invitations, incident lifecycle with an audit timeline. Also implemented: a durable PostgreSQL job queue and optional AI incident analysis (off by default). The queue does not use BullMQ or Redis. Not yet implemented: Socket.IO real-time updates, GitHub issue enrichment, or deployment. See `docs/decisions` (start with 0010) for what exists and what is explicitly not done.
+Early development. Implemented: accounts and organizations, roles, invitations, incident lifecycle with an audit timeline. Also implemented: a durable PostgreSQL job queue and optional AI incident analysis (off by default). The queue does not use BullMQ or Redis. Implemented in source but not yet verified at runtime: secure Socket.IO real-time incident updates (ADR 0016). Not yet implemented: GitHub issue enrichment, or deployment. See `docs/decisions` (start with 0010) for what exists and what is explicitly not done.
 
 ## Requirements
 Node >= 22.12 (see `.nvmrc`), Docker, npm 10+.

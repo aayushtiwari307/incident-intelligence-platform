@@ -12,6 +12,7 @@ import {
   type IncidentEventDto,
   type IncidentEventType,
   type IncidentListDto,
+  type IncidentRealtimeMessage,
 } from "@platform/shared";
 import type { AuthContext } from "../auth/auth.service";
 import { AppError, PG, notFound, pgCode, validationFailed } from "../common/errors";
@@ -66,6 +67,23 @@ function toDto(r: IncidentRow): IncidentDto {
     resolvedAt: r.resolved_at,
   };
 }
+
+interface EventRow {
+  id: string | number;
+  type: IncidentEventType;
+  actor_id: string | null;
+  actor_label: string;
+  payload: unknown;
+  created_at: string;
+}
+
+const toEventDto = (r: EventRow): IncidentEventDto => ({
+  id: num(r.id),
+  type: r.type,
+  actor: { id: r.actor_id, label: r.actor_label },
+  payload: jsonObject(r.payload),
+  createdAt: r.created_at,
+});
 
 const ASSIGNEE_FK = "incidents_assignee_membership_fkey";
 
@@ -276,6 +294,25 @@ export class IncidentService {
     return this.events(this.db, organizationId, incidentId, parsed.data.after, parsed.data.limit);
   }
 
+  /**
+   * SYSTEM read for real-time delivery (there is no caller: authorization happened when each connection was accepted
+   * and is re-checked while it lives). The organization is part of every filter, so a notification can never make this
+   * return another organization's data. Null when the entry or its incident no longer exists.
+   */
+  async loadRealtimeMessage(organizationId: string, eventId: number): Promise<IncidentRealtimeMessage | null> {
+    const found = await this.db.query<EventRow & { incident_id: string }>(
+      `SELECT incident_id, id, type, actor_id, actor_label, payload, ${iso("created_at")} AS created_at
+         FROM incident_events WHERE organization_id = $1 AND id = $2`,
+      [organizationId, eventId],
+    );
+    const row = found.rows[0];
+    if (!row) return null;
+    const incident = await this.db.query<IncidentRow>(`${SELECT_INCIDENT} WHERE i.organization_id = $1 AND i.id = $2`, [organizationId, row.incident_id]);
+    const incidentRow = incident.rows[0];
+    if (!incidentRow) return null;
+    return { eventId: num(row.id), incidentId: row.incident_id, event: toEventDto(row), incident: toDto(incidentRow) };
+  }
+
   // ---------------------------------------------------------------------------------------------
 
   /** Locks the row. Always filtered by organization: another tenant's incident id is indistinguishable from a missing one. */
@@ -323,18 +360,12 @@ export class IncidentService {
   }
 
   private async events(db: SqlClient, organizationId: string, incidentId: string, after: number, limit: number): Promise<IncidentEventDto[]> {
-    const rows = await db.query<{ id: string | number; type: IncidentEventType; actor_id: string | null; actor_label: string; payload: unknown; created_at: string }>(
+    const rows = await db.query<EventRow>(
       `SELECT id, type, actor_id, actor_label, payload, ${iso("created_at")} AS created_at
          FROM incident_events WHERE organization_id = $1 AND incident_id = $2 AND id > $3 ORDER BY id LIMIT $4`,
       [organizationId, incidentId, after, limit],
     );
-    return rows.rows.map((r) => ({
-      id: num(r.id),
-      type: r.type,
-      actor: { id: r.actor_id, label: r.actor_label },
-      payload: jsonObject(r.payload),
-      createdAt: r.created_at,
-    }));
+    return rows.rows.map(toEventDto);
   }
 
   private async userSnapshot(tx: SqlClient, userId: string): Promise<{ id: string; displayName: string }> {

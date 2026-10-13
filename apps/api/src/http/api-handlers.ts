@@ -12,6 +12,11 @@ export interface ApiHandlersOptions {
   allowedOrigins: readonly string[];
   secureCookies: boolean;
   sessionTtlSeconds: number;
+  /**
+   * Called after a change that can end a live connection's right to receive pushes (logout, organization switch or
+   * invitation redemption, member removal). Optional: absent in most tests.
+   */
+  onAccessChanged?: () => void;
 }
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -46,6 +51,14 @@ export class ApiHandlers {
 
   private token(req: HttpRequest): string | undefined {
     return parseCookies(header(req, "cookie"))[sessionCookieName(this.options.secureCookies)];
+  }
+
+  private accessChanged(): void {
+    try {
+      this.options.onAccessChanged?.();
+    } catch {
+      // A notification hook must never turn a successful request into a failure.
+    }
   }
 
   private async authenticate(req: HttpRequest): Promise<AuthContext> {
@@ -89,6 +102,7 @@ export class ApiHandlers {
     this.checkOrigin(req);
     const context = await this.auth.authenticate(this.token(req));
     if (context) await this.auth.logout(context);
+    this.accessChanged();
     return { status: 204, headers: NO_STORE, clearCookie: clearedSessionCookie(this.options.secureCookies) };
   }
 
@@ -100,7 +114,9 @@ export class ApiHandlers {
     const context = await this.authenticate(req);
     const organizationId = (req.body as { organizationId?: unknown } | null)?.organizationId;
     if (typeof organizationId !== "string") throw new AppError("VALIDATION_FAILED", "organizationId is required");
-    return ok(await this.auth.switchOrganization(context, organizationId));
+    const me = await this.auth.switchOrganization(context, organizationId);
+    this.accessChanged();
+    return ok(me);
   }
 
   // ---- organization -------------------------------------------------------------------------------------------
@@ -125,6 +141,7 @@ export class ApiHandlers {
   async acceptInvite(req: HttpRequest): Promise<HttpResult> {
     const context = await this.authenticate(req);
     await this.organizations.acceptInvite(context, req.body);
+    this.accessChanged();
     return ok(await this.auth.me(context));
   }
 
@@ -134,6 +151,7 @@ export class ApiHandlers {
 
   async removeMember(req: HttpRequest): Promise<HttpResult> {
     await this.organizations.removeMember(await this.authenticate(req), req.params.userId ?? "");
+    this.accessChanged();
     return { status: 204, headers: NO_STORE };
   }
 
