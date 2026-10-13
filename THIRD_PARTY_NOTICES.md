@@ -22,3 +22,5 @@ Everything else (workspace layout, env validation, migration runner, SQL schema,
 
 Dependencies are distributed under their own licences; see `package-lock.json` once generated and run
 `npx license-checker` locally. A dependency licence audit has **not** been performed yet.
+
+Milestone 4 adds `socket.io` and `socket.io-client` (both MIT, maintained by the Socket.IO team, installed from npm, not copied into this repository). No source from the reference project or from Socket.IO was reused; the real-time layer was written for this project.

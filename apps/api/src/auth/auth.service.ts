@@ -28,6 +28,14 @@ export interface AuthContext {
   role: OrgRole | null;
 }
 
+/** The live state of a session, used to re-check long-lived connections (see realtime/hub.ts). */
+export interface SessionState {
+  sessionId: string;
+  userId: string;
+  organizationId: string | null;
+  role: OrgRole | null;
+}
+
 export interface AuthServiceOptions {
   sessionTtlSeconds: number;
   /** Limits login attempts per client IP (all accounts). */
@@ -232,6 +240,28 @@ export class AuthService {
       organizationId: row.organization_id,
       role: row.role,
     };
+  }
+
+  /**
+   * Batch form of authenticate() for sessions that are already known by id (long-lived real-time connections).
+   * It applies EXACTLY the same validity rules: not revoked, not expired, user not disabled, and the role is read from
+   * the live membership of the session's active organization. Invalid sessions are simply absent from the result.
+   */
+  async resolveSessions(sessionIds: readonly string[]): Promise<Map<string, SessionState>> {
+    const states = new Map<string, SessionState>();
+    if (sessionIds.length === 0) return states;
+    const result = await this.db.query<{ session_id: string; user_id: string; organization_id: string | null; role: OrgRole | null }>(
+      `SELECT s.id AS session_id, s.user_id, s.organization_id, m.role
+         FROM auth_sessions s
+         JOIN users u ON u.id = s.user_id AND u.disabled_at IS NULL
+         LEFT JOIN memberships m ON m.organization_id = s.organization_id AND m.user_id = s.user_id
+        WHERE s.id = ANY($1::uuid[]) AND s.revoked_at IS NULL AND s.expires_at > now()`,
+      [[...sessionIds]],
+    );
+    for (const row of result.rows) {
+      states.set(row.session_id, { sessionId: row.session_id, userId: row.user_id, organizationId: row.organization_id, role: row.role });
+    }
+    return states;
   }
 
   async logout(auth: AuthContext): Promise<void> {

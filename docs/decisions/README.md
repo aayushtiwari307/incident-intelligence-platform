@@ -19,3 +19,4 @@ Each record states the decision, why, what was rejected, and what is **not yet v
 | [0013](0013-milestone2-review-corrections.md) | Atomic exhausted-job reaping and unsupported-provider config truthfulness | implemented and verified in the Milestone 2.1 Windows baseline |
 | [0014](0014-production-runtime-and-nest-e2e.md) | Queue poison-job isolation, true Nest E2E, production runtime and CI | implemented in source; Milestone 3 verification pending |
 | [0015](0015-milestone3-production-evidence.md) | Milestone 3 production evidence and acceptance gate | source implemented; runtime acceptance pending |
+| [0016](0016-secure-realtime-updates.md) | Secure real-time incident updates: Socket.IO, session-cookie auth, org rooms, LISTEN/NOTIFY, resync recovery | implemented in source; unverified at runtime; built on the unaccepted Milestone 3 candidate |

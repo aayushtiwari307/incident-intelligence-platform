@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { INCIDENT_SEVERITIES, INCIDENT_STATUSES, type IncidentDto, type IncidentSeverity, type IncidentStatus } from "@platform/shared";
 import { AppShell, useCan } from "../../components/shell";
-import { Field, FormError, SeverityBadge, StatusBadge } from "../../components/ui";
+import { Field, FormError, LiveStatus, SeverityBadge, StatusBadge } from "../../components/ui";
 import { ApiError } from "../../lib/api-client";
 import { SEVERITY_LABEL, STATUS_LABEL, errorText, relativeTime } from "../../lib/format";
-import { api } from "../../lib/session";
+import { matchesFilters, reconcileList } from "../../lib/realtime-state";
+import { api, useSession } from "../../lib/session";
+import { useRealtime } from "../../lib/use-realtime";
 
 export default function IncidentsPage() {
   return (
@@ -19,6 +21,8 @@ export default function IncidentsPage() {
 
 function IncidentList() {
   const canCreate = useCan("incident:create");
+  const { state } = useSession();
+  const currentUserId = state.status === "authenticated" ? state.me.user.id : "";
   const [status, setStatus] = useState<IncidentStatus | "">("");
   const [severity, setSeverity] = useState<IncidentSeverity | "">("");
   const [assignee, setAssignee] = useState<"" | "me" | "unassigned">("");
@@ -27,10 +31,17 @@ function IncidentList() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const requestSeq = useRef(0);
+  const loading = useRef(false);
+  const changedWhileLoading = useRef(false);
+  // Live updates read the current filters and paging state without re-subscribing on every change.
+  const live = useRef({ status, severity, assignee, hasMore: false, userId: currentUserId });
+  live.current = { status, severity, assignee, hasMore: nextCursor !== null, userId: currentUserId };
 
   const load = useCallback(
-    async (cursor?: string) => {
+    async (cursor?: string): Promise<void> => {
       const seq = ++requestSeq.current; // ignore a slow response that was superseded by a newer filter choice
+      loading.current = true;
+      changedWhileLoading.current = false;
       setError(null);
       try {
         const page = await api.listIncidents({
@@ -42,8 +53,14 @@ function IncidentList() {
         if (seq !== requestSeq.current) return;
         setItems((prev) => (cursor && prev ? [...prev, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
+        loading.current = false;
+        // A push arrived while this response was in flight: the response may predate it, so read again.
+        if (changedWhileLoading.current) void load();
       } catch (e) {
-        if (seq === requestSeq.current) setError(errorText(e));
+        if (seq === requestSeq.current) {
+          loading.current = false;
+          setError(errorText(e));
+        }
       }
     },
     [status, severity, assignee],
@@ -54,10 +71,21 @@ function IncidentList() {
     void load();
   }, [load]);
 
+  const liveStatus = useRealtime({
+    onEvent: (message) => {
+      if (loading.current) changedWhileLoading.current = true;
+      const { status: s, severity: v, assignee: a, hasMore, userId } = live.current;
+      const matches = matchesFilters(message.incident, { status: s, severity: v, assignee: a }, userId);
+      setItems((prev) => (prev ? reconcileList(prev, hasMore, message.incident, matches) : prev));
+    },
+    onSync: () => void load(),
+  });
+
   return (
     <>
       <div className="page-head">
         <h1>Incidents</h1>
+        <LiveStatus status={liveStatus} />
         {canCreate ? (
           <button type="button" className="btn" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
             {creating ? "Cancel" : "New incident"}

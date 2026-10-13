@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { MeDto } from "@platform/shared";
 import { createApiClient, ApiError, type ApiClient } from "./api-client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3001";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3001";
 
 /** One client for the whole app. */
 export const api: ApiClient = createApiClient(API_URL);

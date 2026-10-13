@@ -86,3 +86,8 @@ textarea { width: 100%; }
 @media (max-width: 40rem) {
   .table th:nth-child(n + 5), .table td:nth-child(n + 5) { display: none; }
 }
+
+.live { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.live-live { color: #067647; }
+.live-reconnecting, .live-connecting { color: var(--sev2); }
+@media (prefers-color-scheme: dark) { .live-live { color: #6ce9a6; } }
