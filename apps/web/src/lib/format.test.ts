@@ -22,6 +22,7 @@ describe("relativeTime", () => {
   it("tolerates garbage and slight clock skew", () => {
     assert.equal(relativeTime("nope", now), "unknown");
     assert.equal(relativeTime("2026-01-10T12:00:30Z", now), "just now");
+    assert.equal(relativeTime("2026-01-17T12:00:00Z", now), "in 7 days");
   });
 });
 

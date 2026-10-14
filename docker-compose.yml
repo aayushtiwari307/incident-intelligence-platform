@@ -1,4 +1,4 @@
-# Local development dependency (PostgreSQL) is the default profile. Redis was removed in Milestone 5: nothing in the
+﻿# Local development dependency (PostgreSQL) is the default profile. Redis was removed in Milestone 5: nothing in the
 # API connects to it (the job queue and real-time layer use PostgreSQL only); add it back when a consumer exists.
 # The optional "app" profile also builds and runs the production API + web containers.
 # For the single-origin reverse-proxy topology add docker-compose.edge.yml (see docs/DEVELOPMENT.md).
@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-platform}
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5545:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -85,3 +85,4 @@ services:
 
 volumes:
   postgres_data:
+

@@ -26,3 +26,13 @@ Recommended flow: branch from accepted `main` → overlay M4 candidate → `npm 
 
 ## Local Windows notes
 Project path currently used for accepted M3: `C:\Users\Aayush Tiwari\Downloads\incident-platform-milestone3 (1)\incident-platform`. Local ports commonly used: Postgres 5434, (Redis 6380 until M5 removed the service), API 3001, web 3000; conflicts occurred, so use an isolated Compose project and alternate host ports if needed. Keep `.env` values private. Browse consistently at `http://127.0.0.1:3000`, not `localhost`.
+
+## Handoff update (2026-10-14): invitation flow
+
+- Current branch: `main`, based on the fetched `origin/main` commit.
+- The current local changes include Team invitation copy controls, future-aware relative-time formatting plus a test, and the M5 PostgreSQL port mapping `127.0.0.1:5545:5432`.
+- Local verification confirmed database reachability on 5545, API startup on 3001, and Next.js startup on 3000.
+- Direct API invitation acceptance succeeded with HTTP 200 after the raw token was extracted from the registration URL fragment. The full URL is not a valid `token` request value. Browser acceptance was not separately retested.
+- The test Viewer account now has a `viewer` membership in the Test Owner organization and still retains its own organization membership as owner.
+- To restore the older M3 web container later, first stop the M5 frontend with Ctrl+C, then run `docker start incident-platform-m3-web-1`. The container was stopped, not deleted.
+- Never commit `.env`, `*.bak`, `npm-audit-report.json`, credentials, or invite tokens. Continue to the next milestone after the M5 verification update is pushed.

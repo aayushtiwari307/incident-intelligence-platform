@@ -156,3 +156,15 @@ Expected when everything passes (after `npm install` + lockfile): unit **287** (
 ## 9. Handoff rules
 
 At a new chat, read this file and inspect the current source ZIP. If memory differs from source or command evidence, state the discrepancy and reconcile. At each accepted milestone, update this file and Claude's persistent project memory if available with exact features, migrations, tests and environment, warnings, gaps, reference comparison and next phase. Never claim memory persistence unless actually updated. Milestone 3 is accepted based on section 5a. Never describe Milestone 4 as verified before its real CI and two-window runtime gates in section 8 have passed. A portable summary for pasting into a new chat is in `docs/HANDOFF.md`.
+
+## 2026-10-14 update: M5 invitation acceptance verification
+
+- Local Docker Desktop was started. The M5 PostgreSQL host mapping in `docker-compose.yml` was changed from `127.0.0.1:5434:5432` to `127.0.0.1:5545:5432` because the older M3 PostgreSQL container already occupied host port 5434. The M5 API configuration uses port 5545.
+- PostgreSQL started successfully and `Test-NetConnection 127.0.0.1 -Port 5545` returned `TcpTestSucceeded: True`.
+- The API started successfully on `127.0.0.1:3001`; the Next.js web app started on `127.0.0.1:3000` after temporarily stopping `incident-platform-m3-web-1` (container not deleted).
+- Invitation record inspection confirmed the invite for the test Viewer email was unexpired, unaccepted, unrevoked, and assigned the `viewer` role in the Test Owner organization.
+- Viewer authentication through the API returned HTTP 200. Posting the entire registration URL as the invitation token returned HTTP 404 because the accept endpoint expects the raw token, not the URL.
+- Extracting the token from the `#invite=` URL fragment and posting it to `POST /api/organization/invites/accept` returned HTTP 200. The response confirmed membership in the Test Owner organization with role `viewer`; the test account retained its owner membership in its original Viewer organization.
+- Conclusion: direct API invitation acceptance is verified. Browser-based acceptance was not independently retested, so no claim is made that the browser flow itself was verified.
+- The local Team page includes invitation-link/token copy controls. `relativeTime()` was updated to handle future timestamps and its test was extended.
+- `.env` is ignored and not tracked. Never commit `.env`, local backup files, audit output, passwords, or invitation tokens. The one-time token used during this test was consumed and must not be reused.

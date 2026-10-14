@@ -29,6 +29,22 @@ export const TRANSITION_VERB: Record<IncidentStatus, string> = {
 export function relativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return "unknown";
+  const deltaSeconds = Math.round((then.getTime() - now.getTime()) / 1000);
+  if (deltaSeconds > 0) {
+    if (deltaSeconds < 45) return "just now";
+    const futureUnits: Array<[number, number, string]> = [
+      [60 * 60, 60, "minute"],
+      [60 * 60 * 24, 60 * 60, "hour"],
+      [60 * 60 * 24 * 30, 60 * 60 * 24, "day"],
+    ];
+    for (const [limit, divisor, unit] of futureUnits) {
+      if (deltaSeconds < limit) {
+        const n = Math.max(1, Math.round(deltaSeconds / divisor));
+        return `in ${n} ${unit}${n === 1 ? "" : "s"}`;
+      }
+    }
+    return `on ${then.toISOString().slice(0, 10)}`;
+  }
   const seconds = Math.round((now.getTime() - then.getTime()) / 1000);
   if (seconds < 45) return "just now";
   const units: Array<[number, string]> = [

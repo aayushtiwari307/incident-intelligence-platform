@@ -82,3 +82,29 @@ New code that has therefore **never run under its real runner**: `apps/api/src/h
 Nobody has performed it. It stays UNVERIFIED until a person does and records the date and result here. Procedure (`docs/DEVELOPMENT.md`, "Live updates"): two windows at the same address, signed in to the same organization (invite a second user), incident list open in both, create/comment in one and watch the other update with "Live"; then sign out in one window and confirm the other stays live for the remaining user while the signed-out window stops; then check from a second organization that nothing appears.
 
 Result: *(not yet performed)*
+
+## Invitation acceptance troubleshooting follow-up (2026-10-14)
+
+### Verified evidence
+
+| Check | Result |
+| --- | --- |
+| M5 PostgreSQL reachable on host port 5545 | PASS |
+| API startup on port 3001, including migrations | PASS |
+| Web development server startup on port 3000 | PASS after resolving the existing M3 port conflict |
+| Invitation row is pending, unexpired, and not revoked | PASS |
+| Test Viewer API login | HTTP 200 |
+| Accept invitation using the raw token | HTTP 200 |
+| Membership created in Test Owner organization with role `viewer` | PASS |
+
+### Root cause of the observed 404
+
+The first direct API acceptance attempt supplied the entire registration URL (`/register#invite=...`) as the `token` value. The endpoint expects only the raw token contained after `#invite=`. Supplying the extracted raw token then succeeded with HTTP 200. This test did not independently verify the browser-based acceptance flow; it establishes that the API accepts the valid token when supplied in the expected format.
+
+### Local runtime note
+
+The M5 Compose PostgreSQL host mapping is `127.0.0.1:5545:5432` to avoid colliding with the existing M3 PostgreSQL mapping on port 5434. The M3 web container `incident-platform-m3-web-1` was stopped temporarily to free port 3000; it was not deleted.
+
+### Security and scope
+
+The real `.env` file is ignored and not tracked. The commit must exclude `.env`, temporary `*.bak` files, `npm-audit-report.json`, passwords, and invitation tokens. The invitation token used for this test has been consumed. This result verifies the API acceptance path; it does not claim that browser-side acceptance was independently retested.

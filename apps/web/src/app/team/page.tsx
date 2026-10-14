@@ -26,6 +26,7 @@ function Team() {
   const [invites, setInvites] = useState<InviteSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedInvite | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState<"link" | "token" | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +63,16 @@ function Team() {
       await load();
     } catch (e) {
       setError(errorText(e));
+    }
+  }
+
+  async function copyInviteText(value: string, kind: "link" | "token") {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedInvite(kind);
+    } catch {
+      setError("Clipboard access failed. Please copy the displayed text manually.");
     }
   }
 
@@ -162,9 +173,26 @@ function Team() {
               <code className="token" data-testid="invite-registration-link">
                 {`${window.location.origin}/register#invite=${encodeURIComponent(created.token)}`}
               </code>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => void copyInviteText(
+                  `${window.location.origin}/register#invite=${encodeURIComponent(created.token)}`,
+                  "link"
+                )}
+              >
+                {copiedInvite === "link" ? "Link copied" : "Copy link"}
+              </button>
               <p className="muted">
                 The link is shown once and works once, only for {created.email}. Prefer to paste the token instead? It is{" "}
-                <code data-testid="invite-token">{created.token}</code>
+                <code data-testid="invite-token">{created.token}</code>{" "}
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => void copyInviteText(created.token, "token")}
+                >
+                  {copiedInvite === "token" ? "Token copied" : "Copy token"}
+                </button>
               </p>
             </div>
           ) : null}
