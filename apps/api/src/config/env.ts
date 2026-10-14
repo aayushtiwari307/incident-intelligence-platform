@@ -62,7 +62,9 @@ const envSchema = z.object({
   API_HOST: z.string().min(1).max(255).optional(),
   API_PORT: envInt(1, 65535).optional(),
   DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)),
-  REDIS_URL: z.string().superRefine(urlWithProtocols(["redis:", "rediss:"], false)),
+  // Optional: nothing in the API connects to Redis (the job queue and real-time layer use PostgreSQL only). It is still
+  // validated when present, so a typo is reported instead of silently ignored.
+  REDIS_URL: z.string().superRefine(urlWithProtocols(["redis:", "rediss:"], false)).optional(),
   TRUST_PROXY: z.string().optional(),
   TRUST_PROXY_HOPS: envInt(0, 10).optional(),
   CORS_ORIGINS: z.string().optional(),
@@ -109,7 +111,8 @@ export interface AppConfig {
   };
   auth: { sessionTtlSeconds: number; inviteTtlSeconds: number };
   database: { url: Secret; poolMax: number; connectTimeoutMs: number; statementTimeoutMs: number };
-  redis: { url: Secret };
+  /** null when REDIS_URL is not set (the normal case). Reserved: no code reads it today. */
+  redis: { url: Secret } | null;
   migrations: { mode: MigrateOnStart };
   logLevel: LogLevel;
   ai: AiConfig;
@@ -248,7 +251,7 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
       connectTimeoutMs: env.DB_CONNECT_TIMEOUT_MS ?? 5_000,
       statementTimeoutMs: env.DB_STATEMENT_TIMEOUT_MS ?? 15_000,
     },
-    redis: { url: new Secret(env.REDIS_URL) },
+    redis: env.REDIS_URL ? { url: new Secret(env.REDIS_URL) } : null,
     migrations: { mode: env.MIGRATE_ON_START ?? "check" },
     logLevel: env.LOG_LEVEL ?? "info",
     ai: resolveAi(env),
@@ -268,7 +271,7 @@ export function describeConfig(config: AppConfig): Record<string, unknown> {
       connectTimeoutMs: config.database.connectTimeoutMs,
       statementTimeoutMs: config.database.statementTimeoutMs,
     },
-    redis: { url: redactUrl(config.redis.url.reveal()) },
+    redis: config.redis ? { url: redactUrl(config.redis.url.reveal()) } : null,
     migrations: config.migrations,
     logLevel: config.logLevel,
     ai: { provider: config.ai.provider, enabled: config.ai.enabled, disabledReason: config.ai.disabledReason, model: config.ai.model, timeoutMs: config.ai.timeoutMs },

@@ -1,0 +1,27 @@
+# 0017 Milestone 5: production-readiness and runtime verification of the real-time stack
+
+**Status: implemented in source (2026-10-14). NOT accepted.** Evidence, including everything that was blocked in the authoring sandbox, is in `docs/verification/milestone-5-status.md`.
+
+## Why this scope
+
+Milestone 4 was merged with unit, integration and CI results reported, but real-time behaviour had never been exercised end to end in containers, behind a proxy, or by a browser; the deployment-shaped defects below were found by reading the source. Live OpenAI (B) is small and best verified once on a verified topology; GitHub enrichment (A) sends incident-derived text to a third party and needs product decisions first. Both are deliberately deferred.
+
+## Decisions
+
+1. **Single-origin topology through a local reverse proxy** (`docker-compose.edge.yml`, `deploy/edge/Caddyfile`, Caddy 2.8.4). `/` to Next.js; `/api/*`, `/socket.io` and `/health/*` to the NestJS API. Only the proxy publishes a host port. Reason: the session cookie is `HttpOnly; SameSite=Lax` and, in production, `__Host-`-prefixed; Lax cookies are not sent on cross-site fetches or WebSocket handshakes, so a web app and an API on unrelated hostnames would sign in and then 401. One origin removes that class of failure and makes CORS and the WebSocket Origin check trivially consistent. `NEXT_PUBLIC_API_URL` is baked into the web build, so the edge override builds the web image for the proxy origin. Plain http on loopback verifies routing, cookies and upgrades; **it does not verify TLS**. `/health/*` is routed only so the smoke test can reach it; in a real deployment expose it to the orchestrator only. Caddy runs as its image default user, not the non-root `node` user used by the API/web images; not changed because it could not be verified without Docker.
+2. **Redis is optional and removed.** A complete repository search (code, scripts, tests, Compose, CI, docs) found no runtime use: no import of `ioredis`, no client, no health check. Only the Compose service, the `api` environment pass-through, `setup-env`, config validation and prose referenced it. `REDIS_URL` is now optional (still validated if present, masked in logs, blank counts as unset); `ioredis` and the Compose `redis` service are removed; `setup-env` no longer generates Redis secrets. The lockfile was rewritten by npm itself (`--package-lock-only --offline`). An existing local `.env` with `REDIS_PASSWORD` keeps working (ignored); an old local Redis container is orphaned and can be removed with `docker compose up -d --remove-orphans`. Re-add Redis when a real consumer exists (for example a distributed rate limiter, see ADR 0010). The PostgreSQL job queue is untouched.
+3. **Trusted-proxy behaviour is tested, not assumed** (`apps/api/src/http/trust-proxy.int.test.ts`, no `REDIS_URL`). With `TRUST_PROXY_HOPS=0` forwarded headers (`X-Forwarded-For`, `X-Real-IP`, `Forwarded`) are ignored: a client cannot reset the per-account login throttle by varying them. With `1` the address the proxy appended (rightmost `X-Forwarded-For` entry) identifies the client, entries a client prepends are ignored, and clients are separated, so one site-wide bucket does not form behind the proxy. The edge topology sets `1` because Caddy overwrites incoming `X-Forwarded-*` headers. Operators must set the exact number of proxies; too low merges all users into one bucket, too high lets clients choose their own address.
+4. **WebSocket smoke** (`scripts/smoke-stack.mjs`, reusing the `socket.io-client` devDependency of `apps/api`; no new package). Six event-driven checks with bounded waits: anonymous refused with `UNAUTHENTICATED`; foreign Origin refused despite a valid cookie; authenticated socket receives `realtime.ready`; a REST-created incident arrives within 5 s; another organization's socket receives nothing (absence is judged only after each side received its own later event, using the hub's commit-order delivery, not a sleep); a socket is closed after its session logs out. Payloads are never printed. The check logic has unit tests against a fake server including negative controls; CI runs a **real** negative control (`REALTIME_ENABLED=false` must make the smoke fail at a `realtime:` check).
+5. **Sign-in verifies the session** (`apps/web/src/lib/auth-flow.ts`). After login/registration the pages call `/api/auth/me` and require it to return the account that just signed in; otherwise an error is shown and nothing is treated as signed in. This catches a dropped `Secure` cookie, a cross-site deployment, and a stale cookie for another account.
+6. **Dependency audit**: not runnable in the authoring sandbox; recorded as BLOCKED with the procedure in `docs/security/npm-audit-m5.md`.
+
+## Unchanged on purpose
+
+Authentication, tenant isolation, Origin/CSRF checks, session revocation, rate limits, real-time authorization, the PostgreSQL queue (durability, leases, fencing, retry), migrations (0001–0006 byte-identical), AI optional/advisory.
+
+## Not included / known limits
+
+- No public deployment, no TLS verification, no real domain.
+- No handshake rate limiting (every invalid-cookie request, HTTP or WebSocket, costs one session lookup).
+- `req.ip`-keyed limiters are still per process; `NODE_ENV=test` still relaxes the registration limit (`api.module.ts`), flagged for a later cleanup.
+- The manual two-browser check is still UNVERIFIED.

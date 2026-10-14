@@ -24,3 +24,7 @@ The test exercises registration/session cookie, incident creation, job worker an
 See `docs/decisions/0008-testing-conventions.md` ("Milestone 3 review") for the exact checks, and the verification report delivered with the ZIP. In short: the queue, handler, service and HTTP-handler code ran against a real PostgreSQL 16 server through a sandbox harness (not Jest, not the real `pg` driver); the Nest wiring, Jest, ESLint, the project's own TypeScript 5.9.3 type-check, the Next.js build, Docker image builds, a browser run and a GitHub Actions run have **not** been executed for this source.
 
 Acceptance still requires, on Windows and CI: the added PostgreSQL tests and the Nest E2E under actual Jest with the real `pg` pool, `npm run typecheck`, `npm run lint`, `npm run build` (Next standalone output), `docker compose --profile app up -d --build --wait` followed by `npm run smoke:stack`, and one green GitHub Actions run. A successful local mock E2E does not mean a live OpenAI account/model has been verified, and a successful Docker build does not mean a production deployment exists.
+
+
+---
+**Update 2026-10-14 (added; the text above is the historical record).** Milestone 3 was accepted on 2026-10-13 from maintainer-REPORTED Windows, browser and GitHub Actions evidence (see `PROJECT_MEMORY.md` section 5a). The status line above is therefore historical. Milestone 5 (ADR 0017) removed the Compose `redis` service and the unused `ioredis` dependency referenced here.

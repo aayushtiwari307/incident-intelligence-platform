@@ -26,3 +26,7 @@ The flow registers an account, creates an incident, lets the real worker complet
 ## Evidence discipline
 
 A committed test or Dockerfile is not evidence it passed. Record real Windows or GitHub Actions command output after running these changes. Live OpenAI calls are not part of CI; the deterministic local mock is the intended integration test boundary. No overall superiority claim against the reference follows solely from this decision.
+
+
+---
+**Update 2026-10-14 (added; the text above is the historical record).** Milestone 3 was accepted on 2026-10-13 from maintainer-REPORTED Windows, browser and GitHub Actions evidence (see `PROJECT_MEMORY.md` section 5a). The status line above is therefore historical. Milestone 5 (ADR 0017) removed the Compose `redis` service and the unused `ioredis` dependency referenced here.

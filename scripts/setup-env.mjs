@@ -1,5 +1,5 @@
 // Creates the three local environment files from their .example templates, with freshly generated
-// database/Redis passwords that match across files. Never overwrites an existing file and never prints
+// database password that matches across files. Never overwrites an existing file and never prints
 // a password. No dependencies, works the same in cmd.exe, PowerShell and bash.
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,19 +9,11 @@ import { fileURLToPath } from "node:url";
 const PLACEHOLDER = "dev_only_change_me";
 
 /** Pure: given template text and two passwords, returns the content of the three files. */
-export function buildEnvFiles(templates, postgresPassword, redisPassword) {
+export function buildEnvFiles(templates, postgresPassword) {
   const replaceLine = (text, key, fn) =>
     text.replace(new RegExp(`^(${key}=)(.*)$`, "m"), (_, prefix, value) => prefix + fn(value));
-  const root = replaceLine(
-    replaceLine(templates.root, "POSTGRES_PASSWORD", () => postgresPassword),
-    "REDIS_PASSWORD",
-    () => redisPassword,
-  );
-  const api = replaceLine(
-    replaceLine(templates.api, "DATABASE_URL", (v) => v.split(PLACEHOLDER).join(postgresPassword)),
-    "REDIS_URL",
-    (v) => v.split(PLACEHOLDER).join(redisPassword),
-  );
+  const root = replaceLine(templates.root, "POSTGRES_PASSWORD", () => postgresPassword);
+  const api = replaceLine(templates.api, "DATABASE_URL", (v) => v.split(PLACEHOLDER).join(postgresPassword));
   return { root, api, web: templates.web };
 }
 
@@ -49,7 +41,6 @@ function main() {
 
   const built = buildEnvFiles(
     { root: read(files.root[0]), api: read(files.api[0]), web: read(files.web[0]) },
-    newPassword(),
     newPassword(),
   );
   for (const [name, [, target]] of Object.entries(files)) {

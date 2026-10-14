@@ -81,7 +81,7 @@ describe("loadConfig validation", () => {
   it("reports every problem at once and names the variables", () => {
     const problems = problemsOf({ API_PORT: "abc", LOG_LEVEL: "verbose" });
     assert.ok(problems.some((p) => p.startsWith("DATABASE_URL: is required")), problems.join("|"));
-    assert.ok(problems.some((p) => p.startsWith("REDIS_URL: is required")));
+    assert.ok(!problems.some((p) => p.startsWith("REDIS_URL")), "REDIS_URL is optional, so it must not be reported when absent");
     assert.ok(problems.some((p) => p.startsWith("API_PORT:")));
     assert.ok(problems.some((p) => p.startsWith("LOG_LEVEL: must be one of")));
   });
@@ -192,7 +192,7 @@ describe("secrets cannot leak through serialisation", () => {
   const config = loadConfig(base({ AI_PROVIDER: "openai", OPENAI_API_KEY: "k-live-abcdef123456" }));
 
   it("JSON.stringify, String and util.inspect never reveal secrets", () => {
-    for (const text of [JSON.stringify(config), String(config.database.url), `${config.redis.url}`, inspect(config, { depth: 10 })]) {
+    for (const text of [JSON.stringify(config), String(config.database.url), `${config.redis?.url}`, inspect(config, { depth: 10 })]) {
       assert.ok(!text.includes(DB_PASSWORD), "db password leaked");
       assert.ok(!text.includes(REDIS_PASSWORD), "redis password leaked");
       assert.ok(!text.includes("k-live-abcdef123456"), "api key leaked");
@@ -209,6 +209,38 @@ describe("secrets cannot leak through serialisation", () => {
     assert.ok(!text.includes(REDIS_PASSWORD));
     assert.ok(!text.includes("k-live-abcdef123456"));
     assert.ok(text.includes("127.0.0.1:5434"));
+  });
+});
+
+describe("REDIS_URL is optional (no code connects to Redis)", () => {
+  const withoutRedis = (extra: Record<string, string | undefined> = {}) => ({ DATABASE_URL: base().DATABASE_URL, ...extra });
+
+  it("loads without REDIS_URL and reports no Redis configuration", () => {
+    const config = loadConfig(withoutRedis());
+    assert.equal(config.redis, null);
+    assert.equal(describeConfig(config).redis, null);
+  });
+
+  it("treats a blank REDIS_URL as unset (set REDIS_URL= on Windows, REDIS_URL= in dotenv files)", () => {
+    assert.equal(loadConfig(withoutRedis({ REDIS_URL: "" })).redis, null);
+    assert.equal(loadConfig(withoutRedis({ REDIS_URL: "   " })).redis, null);
+  });
+
+  it("still parses and masks it when present, so existing environments keep working", () => {
+    const config = loadConfig(base());
+    assert.ok(config.redis !== null);
+    assert.ok(config.redis.url.reveal().includes(REDIS_PASSWORD));
+    assert.ok(!JSON.stringify(describeConfig(config)).includes(REDIS_PASSWORD));
+  });
+
+  it("still rejects a malformed REDIS_URL instead of silently ignoring a typo", () => {
+    assert.ok(problemsOf(withoutRedis({ REDIS_URL: "http://h" })).some((p) => p.startsWith("REDIS_URL:")));
+  });
+
+  it("behaves identically for everything else with and without Redis", () => {
+    const a = loadConfig(base());
+    const b = loadConfig(withoutRedis());
+    assert.deepEqual({ ...a, redis: null, database: null }, { ...b, redis: null, database: null });
   });
 });
 

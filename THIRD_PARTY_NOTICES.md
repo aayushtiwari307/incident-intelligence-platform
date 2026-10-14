@@ -20,7 +20,9 @@ Everything else (workspace layout, env validation, migration runner, SQL schema,
 
 ## Runtime and development dependencies
 
-Dependencies are distributed under their own licences; see `package-lock.json` once generated and run
+Dependencies are distributed under their own licences; see `package-lock.json` and run
 `npx license-checker` locally. A dependency licence audit has **not** been performed yet.
 
 Milestone 4 adds `socket.io` and `socket.io-client` (both MIT, maintained by the Socket.IO team, installed from npm, not copied into this repository). No source from the reference project or from Socket.IO was reused; the real-time layer was written for this project.
+
+Milestone 5 removes `ioredis` (and its transitive packages) and adds an optional runtime container image, `caddy:2.8.4-alpine` (Caddy is Apache-2.0), used only by `docker-compose.edge.yml` as a local reverse proxy. It is pulled from Docker Hub at run time, not copied into this repository. The licence audit above is still not performed.

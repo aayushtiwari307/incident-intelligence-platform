@@ -11,7 +11,7 @@ export class HealthController {
     return { status: "ok" };
   }
 
-  /** Ready to take traffic: the database answers. Redis joins this check in Phase 4. */
+  /** Ready to take traffic: the database answers. Redis is not used by the API, so it is not checked; add it here if that ever changes. */
   @Get("ready")
   async ready() {
     try {

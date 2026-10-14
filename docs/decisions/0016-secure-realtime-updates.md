@@ -55,3 +55,7 @@ Server to client only. There is **no client-to-server message** that selects an 
 ## Verification status
 
 See `PROJECT_MEMORY.md` section 5b for the exact record. In short: the framework-free core, listener, web state/client logic and config were run in a sandbox harness; the Socket.IO adapter, the SQL trigger, `resolveSessions`, `loadRealtimeMessage`, the Nest wiring and both integration suites (`realtime-data`, `nest-realtime`, `access-hook`) have **not** been executed. Dependencies (`socket.io@4.8.4`, `socket.io-client@4.8.4`) are pinned in `package.json` but `package-lock.json` has **not** been regenerated (no registry access); the manifest pins were updated to 4.8.4; run `npm install` once and commit the regenerated lockfile before `npm ci`/CI/Docker will work.
+
+
+---
+**Update 2026-10-14 (added; the text above is the historical record).** Milestone 4 was merged to `main` (PR #1, commit `2e47fce`). The maintainer REPORTS: API integration 154/13 suites, API unit 190/17 suites, web 41/4 suites, shared 37, typecheck, lint, builds and the GitHub PR check passing. The statement above that `package-lock.json` was not regenerated is **stale**: the lockfile contains `socket.io@4.8.4` and `socket.io-client@4.8.4`. Still UNVERIFIED: the manual two-browser check, WebSockets inside containers and behind a proxy (addressed by the Milestone 5 smoke checks, ADR 0017, not yet run), and `npm audit` on this lockfile. Ledger: `docs/verification/milestone-5-status.md`.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Field, FormError } from "../../components/ui";
 import { ApiError } from "../../lib/api-client";
+import { verifySession } from "../../lib/auth-flow";
 import { errorText } from "../../lib/format";
 import { api, useSession } from "../../lib/session";
 
@@ -44,11 +45,18 @@ export default function RegisterPage() {
         password: String(form.get("password")),
         displayName: String(form.get("displayName")),
       };
-      setMe(
+      const registered =
         inviteRegistration && inviteToken
           ? await api.registerWithInvite({ ...credentials, inviteToken })
-          : await api.register({ ...credentials, organizationName: String(form.get("organizationName")) }),
-      );
+          : await api.register({ ...credentials, organizationName: String(form.get("organizationName")) });
+      // The server created the account and a session; confirm this browser really holds it before showing signed-in UI.
+      const verified = await verifySession(api.me, registered.user.id);
+      if (!verified.ok) {
+        setError(verified.message);
+        setBusy(false);
+        return;
+      }
+      setMe(verified.me);
       router.replace("/incidents");
     } catch (e) {
       if (e instanceof ApiError && Object.keys(e.fieldErrors).length > 0) setFields(e.fieldErrors);

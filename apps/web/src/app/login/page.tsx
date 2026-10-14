@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Field, FormError } from "../../components/ui";
 import { ApiError } from "../../lib/api-client";
+import { verifySession } from "../../lib/auth-flow";
 import { errorText } from "../../lib/format";
 import { api, useSession } from "../../lib/session";
 
@@ -33,20 +34,27 @@ export default function LoginPage() {
     setError(null);
     try {
       const loggedIn = await api.login({ email: String(form.get("email")), password: String(form.get("password")) });
+      // The server accepted the credentials; that does not prove this browser holds a working session cookie.
+      const verified = await verifySession(api.me, loggedIn.user.id);
+      if (!verified.ok) {
+        setError(verified.message);
+        setBusy(false);
+        return;
+      }
       if (inviteToken) {
         // When an existing account follows an invitation link, accept it only after successful login.
         try {
           setMe(await api.acceptInvite(inviteToken));
         } catch {
           // Keep the successful login session even when the invite has expired or belongs to another email.
-          setMe(loggedIn);
+          setMe(verified.me);
           setInviteToken("");
           setAcceptFailed(true);
           setBusy(false);
           return;
         }
       } else {
-        setMe(loggedIn);
+        setMe(verified.me);
       }
       router.replace("/incidents");
     } catch (e) {

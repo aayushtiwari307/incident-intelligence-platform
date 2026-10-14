@@ -1,5 +1,7 @@
 # Development setup on Windows (CMD and PowerShell)
 
+> **Milestone 5 (2026-10-14):** Redis is no longer part of the stack; the web/API can also run behind a local single-origin proxy (see "Single-origin proxy topology"). M5 paths are unverified until run on Windows/CI.
+>
 > Native development and test commands were verified on Windows against Milestone 2.1. Milestone 3 adds a true Nest E2E test and production container path; those newly added paths remain unverified until they pass locally/CI. If a step behaves differently, report the exact command and result.
 
 Commands are shown for **CMD** and **PowerShell** where they differ; where only one block is shown it works in both.
@@ -11,8 +13,8 @@ Run everything from the repository root unless stated otherwise.
 |------|-------|-------|
 | Node.js 22.12+ | `node -v` | `.nvmrc` pins 22 |
 | npm 10+ | `npm -v` | ships with Node 22 |
-| Docker Desktop, **running** | `docker version` shows a *Server* section | PostgreSQL and Redis run in containers |
-| Free ports | 5434, 6380, 3001, 3000 | the containers publish on 127.0.0.1 only |
+| Docker Desktop, **running** | `docker version` shows a *Server* section | PostgreSQL runs in a container |
+| Free ports | 5434, 3001, 3000 (8080 for the proxy topology) | the containers publish on 127.0.0.1 only |
 
 **PowerShell only:** if `npm` fails with "running scripts is disabled on this system", either use `npm.cmd` instead of `npm`,
 or run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
@@ -36,8 +38,8 @@ between them. It never overwrites an existing file and never prints a password.
 
 | File | Used by | Contains |
 |------|---------|----------|
-| `.env` | Docker Compose | `POSTGRES_*`, `REDIS_PASSWORD` |
-| `apps/api/.env` | the API | `DATABASE_URL`, `REDIS_URL` (same passwords), `CORS_ORIGINS`, ... |
+| `.env` | Docker Compose | `POSTGRES_*` |
+| `apps/api/.env` | the API | `DATABASE_URL` (same password), `CORS_ORIGINS`, ... |
 | `apps/web/.env.local` | Next.js | `NEXT_PUBLIC_API_URL` only |
 
 Never put a secret in `apps/web/.env.local`: every `NEXT_PUBLIC_*` value is visible to every visitor.
@@ -46,13 +48,13 @@ Never put a secret in `apps/web/.env.local`: every `NEXT_PUBLIC_*` value is visi
 Edited the passwords by hand later? Keep the root `.env` and `apps/api/.env` in sync, then recreate the containers
 (the database keeps its first password in its volume): `npm run services:reset` (**this deletes the local database data**).
 
-## 3. Start PostgreSQL and Redis
+## 3. Start PostgreSQL
 
 ```
 npm run services:up
 ```
 
-Waits until both containers are healthy. Check: `docker compose ps` shows `healthy` for `postgres` and `redis`.
+Waits until the container is healthy. Check: `docker compose ps` shows `healthy` for `postgres`. (An old `redis` container from before M5 may linger; `docker compose up` warns about orphans and it is harmless. `REDIS_URL` is optional and unused.)
 Stop with `npm run services:down` (data is kept in Docker volumes).
 
 ## 4. Start the API (terminal 1)
@@ -136,7 +138,7 @@ value from your `.env`:
 
 ## Run the full production-container stack
 
-The default `npm run services:up` starts only PostgreSQL and Redis so Windows development can run the API and web natively. To build and run the full production container stack, first create the root `.env` with `npm run setup:env`, then run:
+The default `npm run services:up` starts only PostgreSQL so Windows development can run the API and web natively. To build and run the full production container stack, first create the root `.env` with `npm run setup:env`, then run:
 
 ```powershell
 docker compose --profile app up -d --build --wait
@@ -150,7 +152,7 @@ Stop the application containers without deleting the database volume:
 docker compose --profile app down
 ```
 
-With the containers running, `npm run smoke:stack` exercises the real API and web over HTTP (it registers a throw-away user, so use it only against local/CI stacks). Percent-encode special characters in `POSTGRES_PASSWORD` or avoid them: the compose file interpolates it into `DATABASE_URL`.
+With the containers running, `npm run smoke:stack` exercises the real API and web over HTTP (it registers throw-away users, so use it only against local/CI stacks). Since M5 it also opens real Socket.IO connections: unauthenticated and foreign-Origin refusal, `realtime.ready`, delivery of a REST-created incident within 5 s, cross-organization isolation and socket closure after logout. `SMOKE_REALTIME=off` skips those checks. Output never contains incident text. Percent-encode special characters in `POSTGRES_PASSWORD` or avoid them: the compose file interpolates it into `DATABASE_URL`.
 
 Do not use `npm run services:reset` for routine shutdown; it removes Compose volumes and deletes local database data.
 
@@ -158,7 +160,22 @@ Do not use `npm run services:reset` for routine shutdown; it removes Compose vol
 
 The API serves Socket.IO on the same port (`/socket.io`, WebSocket only). Open two browser windows at `http://127.0.0.1:3000` signed in to the same organization (a second user can be invited on the Team page), open the incident list in both, create or comment on an incident in one: the other updates without a reload and shows "Live" next to the heading. Do not use `localhost` for one and `127.0.0.1` for the other: the session cookie is host-specific and the socket handshake checks `Origin` against `CORS_ORIGINS`.
 
-After pulling Milestone 4 you must run `npm install` once (it adds `socket.io` and `socket.io-client`; the committed lockfile must be regenerated) and apply migration 0006 (`npm run migrate`, or restart the API with `MIGRATE_ON_START=apply`).
+Milestone 4 added `socket.io` and `socket.io-client`; the committed lockfile contains them (use `npm ci`). Apply migration 0006 (`npm run migrate`, or restart the API with `MIGRATE_ON_START=apply`).
+
+## Single-origin proxy topology (Milestone 5)
+
+A Caddy container serves the web app and the API from one origin so the `SameSite=Lax` cookie, the Origin check and WebSockets behave as they would behind a real production domain. Only the proxy is published (`127.0.0.1:8080`); the API and web ports are not.
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app up -d --build --wait
+$env:API_URL = "http://127.0.0.1:8080"; $env:WEB_URL = "http://127.0.0.1:8080"
+npm run smoke:stack
+docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app down
+```
+
+`/api/*`, `/socket.io` and `/health/*` go to the API, everything else to the web app. The override sets `TRUST_PROXY_HOPS=1` (the proxy overwrites client `X-Forwarded-*` headers) and `CORS_ORIGINS=http://127.0.0.1:8080`; the web image is built with `NEXT_PUBLIC_API_URL` set to the same origin (it is baked in at build time, so switching topology needs `--build`). The proxy speaks plain HTTP: TLS termination and the `Secure` cookie flag over HTTPS are not verified. Use `EDGE_PORT` to change the port. Keep `TRUST_PROXY_HOPS=0` whenever nothing sits in front of the API.
+
+Optional: `REDIS_URL` may be set but nothing uses it. Negative control for the realtime checks: start the API with `REALTIME_ENABLED=false` and run `npm run smoke:stack`; it must fail at a `realtime:` check.
 
 ## Troubleshooting
 
@@ -166,7 +183,7 @@ After pulling Milestone 4 you must run `npm install` once (it adds `socket.io` a
 |---------|-------------|
 | `Invalid environment configuration` listing variables | `apps/api/.env` missing or incomplete: run `npm run setup:env`. Values are never echoed. |
 | `password authentication failed` | root `.env` and `apps/api/.env` passwords differ, or the volume was created with older ones: `npm run services:reset` |
-| `ECONNREFUSED 127.0.0.1:5434` | containers not running: `npm run services:up`; start Docker Desktop first |
+| `ECONNREFUSED 127.0.0.1:5434` | container not running: `npm run services:up`; start Docker Desktop first |
 | `migration CHECKSUM_MISMATCH` | an applied migration file was edited. Never edit applied migrations; add a new numbered one. |
 | `LOCK_TIMEOUT` | another API/migrate process is mid-migration; wait or stop it |
 | Port 3001 or 3000 already in use | stop the other process; change `API_PORT` / the web `--port` and `CORS_ORIGINS` together |

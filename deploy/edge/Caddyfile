@@ -1,0 +1,26 @@
+# Local single-origin reverse proxy for verification (Milestone 5). Plain http on a loopback port: this proves routing,
+# cookies and WebSocket upgrades behind ONE origin; it does NOT prove TLS (terminate TLS in front of this in a real
+# deployment, or give Caddy a real hostname and let it manage certificates).
+#
+#   /api/*  /socket.io/*  /health/*  -> NestJS API (api:3001)
+#   everything else                  -> Next.js web app (web:3000)
+#
+# Caddy's reverse_proxy overwrites client-supplied X-Forwarded-* headers unless the peer is a trusted proxy, so the API
+# (TRUST_PROXY_HOPS=1) sees exactly one value: the address that connected to this proxy. WebSocket upgrades (Socket.IO
+# is WebSocket-only here) are passed through automatically, with Origin and Cookie intact. No access log is enabled on
+# purpose: request lines can contain filter values.
+# /health/* is routed only so the smoke test can reach it through the proxy; expose it to your orchestrator, not to users.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	@api path /api/* /socket.io /socket.io/* /health/*
+	handle @api {
+		reverse_proxy api:3001
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

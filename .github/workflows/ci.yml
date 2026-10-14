@@ -44,10 +44,15 @@ jobs:
       - run: npm run build
       - name: Prepare local-only Compose configuration
         run: cp .env.example .env
-      - name: Build and start the complete container stack
+      - name: Validate Compose files (default, app, and single-origin edge topology)
         run: |
+          docker compose config --quiet
           docker compose --profile app config --quiet
-          docker compose --profile app up -d --build --wait
+          docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app config --quiet
+
+      # ---- Topology 1: direct (web :3000, API :3001). REDIS_URL is NOT set: the API must not need Redis. ----
+      - name: Build and start the complete container stack
+        run: docker compose --profile app up -d --build --wait
       - name: Application containers run as a non-root user
         run: |
           for service in api web; do
@@ -55,11 +60,46 @@ jobs:
             echo "$service runs as uid $uid"
             test "$uid" != "0"
           done
-      - name: Smoke-test the running stack over HTTP (health, web page, auth, incidents, CSRF, session revocation)
+      - name: Smoke-test the running stack (HTTP + WebSocket; Redis absent)
         run: npm run smoke:stack
+      - name: Negative control - the smoke test must FAIL when real-time is disabled
+        run: |
+          REALTIME_ENABLED=false docker compose --profile app up -d --wait api
+          if output="$(npm run smoke:stack 2>&1)"; then
+            echo "$output"
+            echo "NEGATIVE CONTROL FAILED: smoke test passed although REALTIME_ENABLED=false"
+            exit 1
+          fi
+          echo "$output" | grep -q "FAIL realtime:" || { echo "$output"; echo "NEGATIVE CONTROL FAILED: smoke failed, but not at a realtime check"; exit 1; }
+          echo "negative control OK: the smoke test detects disabled real-time"
+      - name: REDIS_URL present (pointing nowhere) changes nothing - the API never connects to Redis
+        run: |
+          REDIS_URL=redis://:unused@127.0.0.1:6379 docker compose --profile app up -d --wait api
+          npm run smoke:stack
       - name: Container logs (only when something failed)
         if: failure()
         run: docker compose --profile app logs --no-color --tail=200
-      - name: Stop the stack without deleting volumes
+      - name: Stop the direct stack without deleting volumes
         if: always()
         run: docker compose --profile app down --remove-orphans
+
+      # ---- Topology 2: ONE origin behind a reverse proxy (Caddy). Only the proxy publishes a port. ----
+      - name: Build and start the single-origin stack behind the proxy
+        run: docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app up -d --build --wait
+      - name: Only the proxy is reachable from the host
+        run: |
+          curl -fsS http://127.0.0.1:8080/health/live
+          for port in 3000 3001; do
+            if curl -fsS --max-time 3 "http://127.0.0.1:$port/" >/dev/null 2>&1; then echo "port $port is published but must not be"; exit 1; fi
+          done
+      - name: Smoke-test THROUGH the proxy (API requests, web page and WebSocket upgrade on one origin)
+        env:
+          API_URL: http://127.0.0.1:8080
+          WEB_URL: http://127.0.0.1:8080
+        run: npm run smoke:stack
+      - name: Container logs (only when something failed)
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app logs --no-color --tail=200
+      - name: Stop the proxy stack without deleting volumes
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app down --remove-orphans
