@@ -173,7 +173,14 @@ npm run smoke:stack
 docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app down
 ```
 
-`/api/*`, `/socket.io` and `/health/*` go to the API, everything else to the web app. The override sets `TRUST_PROXY_HOPS=1` (the proxy overwrites client `X-Forwarded-*` headers) and `CORS_ORIGINS=http://127.0.0.1:8080`; the web image is built with `NEXT_PUBLIC_API_URL` set to the same origin (it is baked in at build time, so switching topology needs `--build`). The proxy speaks plain HTTP: TLS termination and the `Secure` cookie flag over HTTPS are not verified. Use `EDGE_PORT` to change the port. Keep `TRUST_PROXY_HOPS=0` whenever nothing sits in front of the API.
+`/api/*`, `/socket.io` and `/health/*` go to the API, everything else to the web app. The override sets `TRUST_PROXY_HOPS=1` (the proxy overwrites client `X-Forwarded-*` headers). In this topology the browser uses same-origin relative REST and WebSocket URLs, so the frontend no longer has a public API hostname baked into its bundle. The API Origin allow-list stays explicit: by default it is `http://127.0.0.1:8080`; when using an HTTPS tunnel, set `PUBLIC_ORIGIN` to the exact new URL before recreating the API container, for example:
+
+```powershell
+$env:PUBLIC_ORIGIN = "https://your-current-name.trycloudflare.com"
+docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app up -d --wait api
+```
+
+Replace the example with the actual tunnel URL (scheme and hostname only, no path). No web rebuild is needed when the tunnel hostname changes. If you change `EDGE_PORT`, also set `PUBLIC_ORIGIN` to the corresponding local origin. The proxy speaks plain HTTP internally; the public tunnel supplies HTTPS. Keep `TRUST_PROXY_HOPS=0` whenever nothing sits in front of the API.
 
 Optional: `REDIS_URL` may be set but nothing uses it. Negative control for the realtime checks: start the API with `REALTIME_ENABLED=false` and run `npm run smoke:stack`; it must fail at a `realtime:` check.
 

@@ -7,7 +7,8 @@ import type { SocketLike } from "./realtime-client";
  * so the HttpOnly session cookie authenticates the handshake: the page never sees or sends a token itself.
  */
 export function createSocket(apiUrl: string): SocketLike {
-  const socket = io(apiUrl, {
+  // An empty API URL deliberately means the current page origin (the edge/proxy topology).
+  const socket = io(apiUrl || undefined, {
     path: REALTIME_PATH,
     transports: ["websocket"],
     withCredentials: true,

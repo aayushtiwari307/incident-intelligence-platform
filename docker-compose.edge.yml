@@ -3,14 +3,14 @@
 #   docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app up -d --build --wait
 #
 # Everything is reachable ONLY through the proxy at http://127.0.0.1:${EDGE_PORT:-8080}: the API and web containers no
-# longer publish host ports. The browser talks to one origin, so the SameSite=Lax __Host- session cookie, CORS and the
-# WebSocket Origin check all see the same origin. NEXT_PUBLIC_API_URL is baked into the web build, so building with this
-# file produces a web image for THIS origin (rebuild without the file for the direct 3000/3001 topology).
+# longer publish host ports. The browser uses same-origin REST and WebSocket URLs, so changing the public hostname does
+# not require rebuilding the web image. Set PUBLIC_ORIGIN to the exact browser-visible origin (for example, an HTTPS
+# trycloudflare URL) so API CSRF/CORS and WebSocket Origin checks remain strict rather than using a wildcard.
 services:
   api:
     ports: !reset []
     environment:
-      CORS_ORIGINS: "http://127.0.0.1:${EDGE_PORT:-8080}"
+      CORS_ORIGINS: "${PUBLIC_ORIGIN:-http://127.0.0.1:8080}"
       # Exactly one trusted reverse proxy (the edge service below) sits in front of the API.
       TRUST_PROXY_HOPS: "1"
 
@@ -18,7 +18,8 @@ services:
     ports: !reset []
     build:
       args:
-        NEXT_PUBLIC_API_URL: "http://127.0.0.1:${EDGE_PORT:-8080}"
+        # Empty base URL means same-origin /api and WebSocket requests; the browser-visible host can vary.
+        NEXT_PUBLIC_API_URL: ""
 
   edge:
     profiles: ["app"]

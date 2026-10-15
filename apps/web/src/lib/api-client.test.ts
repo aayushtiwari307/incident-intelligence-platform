@@ -16,6 +16,16 @@ function stub(status: number, body?: unknown): { fetch: FetchLike; calls: Call[]
 }
 
 describe("api client", () => {
+  it("supports same-origin requests when the configured base URL is empty", async () => {
+    const s = stub(200, {
+      user: { id: "u1", email: "owner@example.com", displayName: "Owner" },
+      memberships: [], activeOrganizationId: "org-1", role: "owner",
+    });
+    await createApiClient("", s.fetch).me();
+    assert.equal((s.calls[0] as Call).url, "/api/auth/me");
+    assert.equal((s.calls[0] as Call).init?.credentials, "include");
+  });
+
   it("always sends credentials, never an organization id, and JSON bodies with a content type", async () => {
     const s = stub(201, { id: "i1" });
     const api = createApiClient("http://api.test/", s.fetch);
