@@ -69,6 +69,7 @@ const envSchema = z.object({
   TRUST_PROXY_HOPS: envInt(0, 10).optional(),
   CORS_ORIGINS: z.string().optional(),
   BODY_LIMIT_BYTES: envInt(1024, 10 * 1024 * 1024).optional(),
+  WEBHOOK_BODY_LIMIT_BYTES: envInt(1024, 10 * 1024 * 1024).optional(),
   DB_POOL_MAX: envInt(1, 100).optional(),
   DB_CONNECT_TIMEOUT_MS: envInt(100, 60_000).optional(),
   DB_STATEMENT_TIMEOUT_MS: envInt(100, 300_000).optional(),
@@ -108,6 +109,8 @@ export interface AppConfig {
     trustProxyHops: number;
     corsOrigins: string[];
     bodyLimitBytes: number;
+    /** Own limit for server-to-server webhooks (Alertmanager notifications are larger than browser requests). */
+    webhookBodyLimitBytes: number;
   };
   auth: { sessionTtlSeconds: number; inviteTtlSeconds: number };
   database: { url: Secret; poolMax: number; connectTimeoutMs: number; statementTimeoutMs: number };
@@ -240,6 +243,7 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
       trustProxyHops: env.TRUST_PROXY_HOPS ?? 0,
       corsOrigins,
       bodyLimitBytes: env.BODY_LIMIT_BYTES ?? 64 * 1024,
+      webhookBodyLimitBytes: env.WEBHOOK_BODY_LIMIT_BYTES ?? 1024 * 1024,
     },
     auth: {
       sessionTtlSeconds: (env.SESSION_TTL_HOURS ?? 24 * 7) * 3600,

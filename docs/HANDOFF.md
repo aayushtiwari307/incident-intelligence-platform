@@ -36,3 +36,6 @@ Project path currently used for accepted M3: `C:\Users\Aayush Tiwari\Downloads\i
 - The test Viewer account now has a `viewer` membership in the Test Owner organization and still retains its own organization membership as owner.
 - To restore the older M3 web container later, first stop the M5 frontend with Ctrl+C, then run `docker start incident-platform-m3-web-1`. The container was stopped, not deleted.
 - Never commit `.env`, `*.bak`, `npm-audit-report.json`, credentials, or invite tokens. Continue to the next milestone after the M5 verification update is pushed.
+
+## Handoff update (2026-10-16): Milestone 7 (implemented, NOT accepted)
+Alertmanager webhook with Bearer integrations and alert-cycle dedupe. Read `docs/decisions/0018-alertmanager-ingestion.md`, `docs/integrations/alertmanager.md` and `docs/verification/milestone-7-status.md` (what ran vs what did not). Migration 0007 is new and unapplied anywhere. Only a sandbox stand-in ran the tests; real Jest/CI/Docker/browser are pending. Never run `services:reset`; never edit applied migrations; never print tokens.

@@ -13,6 +13,8 @@ export const ACTION_MIN_ROLE = {
   "member:invite": "admin",
   "member:remove": "admin",
   "member:setRole": "admin",
+  // Create, list, rotate and revoke integration credentials (they let an outside system create incidents).
+  "integration:manage": "admin",
 } as const satisfies Record<string, OrgRole>;
 
 export type Action = keyof typeof ACTION_MIN_ROLE;

@@ -38,6 +38,16 @@ export class SlidingWindowLimiter {
     return { allowed: true, retryAfterSeconds: 0 };
   }
 
+  /** Says whether `key` is over the limit right now WITHOUT counting an attempt (used to gate on past failures). */
+  peek(key: string): RateLimitResult {
+    const now = this.now();
+    const recent = (this.hits.get(key) ?? []).filter((t) => t > now - this.windowMs);
+    if (recent.length >= this.limit) {
+      return { allowed: false, retryAfterSeconds: Math.ceil(((recent[0] as number) + this.windowMs - now) / 1000) };
+    }
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
   /** Forget a key (e.g. after a successful login so honest users are not penalised for earlier typos). */
   reset(key: string): void {
     this.hits.delete(key);

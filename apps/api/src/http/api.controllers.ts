@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Patch, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
 import { ApiHandlers } from "./api-handlers";
+import { readJsonBody } from "./webhook-body";
 import type { HttpRequest, HttpResult } from "./http-types";
 
 export function toHttpRequest(req: Request, body: unknown): HttpRequest {
@@ -149,5 +151,59 @@ export class IncidentController {
   @Post(":id/analysis")
   async requestAnalysis(@Req() req: Request, @Res() res: Response) {
     return send(res, await this.h.requestAnalysis(toHttpRequest(req, undefined)));
+  }
+}
+
+@Controller("api/organization/integrations")
+export class IntegrationController {
+  constructor(@Inject(ApiHandlers) private readonly h: ApiHandlers) {}
+
+  @Get()
+  async list(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.listIntegrations(toHttpRequest(req, undefined)));
+  }
+
+  @Post()
+  async create(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, await this.h.createIntegration(toHttpRequest(req, body)));
+  }
+
+  @Post(":id/rotate")
+  @HttpCode(200)
+  async rotate(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.rotateIntegration(toHttpRequest(req, undefined)));
+  }
+
+  @Delete(":id")
+  async revoke(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.revokeIntegration(toHttpRequest(req, undefined)));
+  }
+}
+
+/** Injection token for the webhook body limit (bytes); configured by WEBHOOK_BODY_LIMIT_BYTES. */
+export const WEBHOOK_BODY_LIMIT = Symbol("WEBHOOK_BODY_LIMIT");
+
+/**
+ * Server-to-server endpoints. No session cookie, no Origin check, no framework body parser: the global JSON parser skips
+ * this path (see configure-http.ts) and the handler reads the body itself, after authentication, with its own limit.
+ */
+@Controller("api/v1/integrations")
+export class IntegrationWebhookController {
+  constructor(
+    @Inject(AlertWebhookHandlers) private readonly h: AlertWebhookHandlers,
+    @Inject(WEBHOOK_BODY_LIMIT) private readonly limitBytes: number,
+  ) {}
+
+  @Post("alertmanager")
+  @HttpCode(200)
+  async alertmanager(@Req() req: Request, @Res() res: Response) {
+    return send(
+      res,
+      await this.h.alertmanager({
+        ip: req.ip ?? "unknown",
+        headers: req.headers,
+        readJson: () => readJsonBody(req, { limitBytes: this.limitBytes }),
+      }),
+    );
   }
 }

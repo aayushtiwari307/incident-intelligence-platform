@@ -18,7 +18,7 @@ describe("access-change hook (real PostgreSQL)", () => {
   let handlers: ApiHandlers;
 
   const build = (hook: () => void): ApiHandlers =>
-    new ApiHandlers(app.auth, app.organizations, app.incidents, app.analysis, {
+    new ApiHandlers(app.auth, app.organizations, app.incidents, app.analysis, app.integrations, {
       allowedOrigins: [ORIGIN],
       secureCookies: false,
       sessionTtlSeconds: 3600,

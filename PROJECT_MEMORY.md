@@ -168,3 +168,12 @@ At a new chat, read this file and inspect the current source ZIP. If memory diff
 - Conclusion: direct API invitation acceptance is verified. Browser-based acceptance was not independently retested, so no claim is made that the browser flow itself was verified.
 - The local Team page includes invitation-link/token copy controls. `relativeTime()` was updated to handle future timestamps and its test was extended.
 - `.env` is ignored and not tracked. Never commit `.env`, local backup files, audit output, passwords, or invitation tokens. The one-time token used during this test was consumed and must not be reused.
+
+## 2026-10-16 update: Milestone 7 (alert intake and deduplication) implemented, NOT accepted
+
+- Adds migration `0007_alert_integrations.sql` (`integrations`, `alert_cycles`), `POST /api/v1/integrations/alertmanager` (Bearer token, Authorization header only), management endpoints under `/api/organization/integrations` (owner/admin; `integration:manage`), a Team-page panel and `scripts/simulate-alertmanager.mjs` (`npm run simulate:alertmanager`, loopback only).
+- Dedupe identity is integration id + fingerprint + normalized startsAt (never groupKey); one transaction per delivery; FOR SHARE on the integration row, per-integration advisory lock, UNIQUE + ON CONFLICT backstop. Backpressure is 503 + Retry-After because Alertmanager does not retry 4xx/429. Details: ADR 0018 and `docs/integrations/alertmanager.md`.
+- Evidence: only a sandbox stand-in (pg wire shim + Jest-like runner on real PostgreSQL 16) was run. Real Jest, `npm ci`, Nest wiring, ESLint, web build, Docker, CI and browser were NOT run. See `docs/verification/milestone-7-status.md`.
+- Follow-up candidate fix: first-seen resolved cycles are persisted as tombstones (`alert_cycles.incident_id IS NULL`), so late firing deliveries cannot create phantom incidents; new startsAt values remain distinct cycles. Regression/concurrency integration tests were added but require an isolated disposable PostgreSQL test server before they can be counted as executed.
+- Limitations: in-memory per-process rate limits; a real Alertmanager was not tested. See the verification status for run/block status.
+- Next: run the acceptance sequence in the status file, fix real failures without weakening tests, then consider GitHub issue enrichment.

@@ -56,6 +56,14 @@ describe("loadConfig defaults", () => {
     assert.equal(config.database.poolMax, 10);
   });
 
+  it("webhook body limit defaults to 1 MiB, is separate from the browser limit, and is validated", () => {
+    assert.equal(loadConfig(base()).http.webhookBodyLimitBytes, 1024 * 1024);
+    assert.equal(loadConfig(base({ WEBHOOK_BODY_LIMIT_BYTES: "262144" })).http.webhookBodyLimitBytes, 262144);
+    assert.equal(loadConfig(base({ WEBHOOK_BODY_LIMIT_BYTES: "262144" })).http.bodyLimitBytes, 65536);
+    assert.throws(() => loadConfig(base({ WEBHOOK_BODY_LIMIT_BYTES: "10" })), /WEBHOOK_BODY_LIMIT_BYTES/);
+    assert.throws(() => loadConfig(base({ WEBHOOK_BODY_LIMIT_BYTES: "lots" })), /WEBHOOK_BODY_LIMIT_BYTES/);
+  });
+
   it("session and invitation lifetimes default to 7 days and are validated", () => {
     const config = loadConfig(base());
     assert.equal(config.auth.sessionTtlSeconds, 7 * 24 * 3600);

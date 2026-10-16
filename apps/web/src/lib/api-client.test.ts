@@ -107,4 +107,30 @@ describe("api client", () => {
     assert.equal((s.calls[1] as Call).init?.method, "POST");
     assert.equal((s.calls[1] as Call).init?.body, undefined);
   });
+
+  it("integration calls use the session cookie, send no organization id and encode ids", async () => {
+    const s = stub(201, { id: "i1", token: "t".repeat(43) });
+    const api = createApiClient("http://api.test", s.fetch);
+    await api.createIntegration("prod alertmanager");
+    const create = s.calls[0] as Call;
+    assert.equal(create.url, "http://api.test/api/organization/integrations");
+    assert.equal(create.init?.method, "POST");
+    assert.equal(create.init?.credentials, "include");
+    assert.deepEqual(JSON.parse(String(create.init?.body)), { name: "prod alertmanager" });
+
+    await api.rotateIntegration("a/b");
+    assert.equal((s.calls[1] as Call).url, "http://api.test/api/organization/integrations/a%2Fb/rotate");
+    assert.equal((s.calls[1] as Call).init?.method, "POST");
+    await api.revokeIntegration("a/b");
+    assert.equal((s.calls[2] as Call).url, "http://api.test/api/organization/integrations/a%2Fb");
+    assert.equal((s.calls[2] as Call).init?.method, "DELETE");
+    for (const call of s.calls) assert.ok(!String(call.init?.body ?? "").includes("organization"));
+  });
+
+  it("lists integrations from the items envelope", async () => {
+    const s = stub(200, { items: [{ id: "i1", name: "n", status: "active" }] });
+    const items = await createApiClient("http://api.test", s.fetch).listIntegrations();
+    assert.equal(items.length, 1);
+    assert.equal((s.calls[0] as Call).url, "http://api.test/api/organization/integrations");
+  });
 });

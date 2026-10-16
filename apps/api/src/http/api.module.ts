@@ -1,4 +1,7 @@
 import { Module } from "@nestjs/common";
+import { AlertIngestionService } from "../alerts/alert-ingestion.service";
+import { IntegrationService } from "../alerts/integration.service";
+import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
 import { AnalysisJobHandler } from "../analysis/analysis.handler";
 import { AnalysisService } from "../analysis/analysis.service";
 import { createAnalysisProvider } from "../analysis/provider-factory";
@@ -15,13 +18,19 @@ import { JOB_WORKER, WorkerLifecycle } from "../jobs/worker.lifecycle";
 import { createLogger } from "../common/logger";
 import { OrganizationService } from "../organizations/organization.service";
 import { ApiHandlers } from "./api-handlers";
-import { AuthController, IncidentController, OrganizationController } from "./api.controllers";
+import { AuthController, IncidentController, IntegrationController, IntegrationWebhookController, OrganizationController, WEBHOOK_BODY_LIMIT } from "./api.controllers";
 import { SlidingWindowLimiter } from "./rate-limiter";
 import { RealtimeHub } from "../realtime/hub";
 import { REALTIME_LISTEN_CONNECTOR, RealtimeService, defaultListenConnector } from "../realtime/realtime.service";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
+const ONE_MINUTE = 60 * 1000;
+
+// Webhook limits (per API process; see docs/integrations/alertmanager.md for what in-memory limiting does and does not give).
+const WEBHOOK_IP_LIMIT_PER_MINUTE = 600;
+const WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES = 20;
+const WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE = 300;
 
 // Allow integration tests to create many users from one local IP.
 const REGISTER_IP_LIMIT = process.env.NODE_ENV === "test" ? 10_000 : 10;
@@ -35,7 +44,7 @@ const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
  * instance, per-instance (so effectively looser) when scaled out. Moving them to Redis is the planned fix (ADR 0010).
  */
 @Module({
-  controllers: [AuthController, OrganizationController, IncidentController],
+  controllers: [AuthController, OrganizationController, IncidentController, IntegrationController, IntegrationWebhookController],
   providers: [
     { provide: OPENAI_FETCH, useValue: fetch },
     {
@@ -73,6 +82,26 @@ const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
       useFactory: (db: DatabaseService, analysis: AnalysisService) =>
         new IncidentService(db.database, (tx, i) => analysis.enqueueInTransaction(tx, i.organizationId, i.incidentId, i.version, i.createdBy)),
     },
+    { provide: IntegrationService, inject: [DatabaseService], useFactory: (db: DatabaseService) => new IntegrationService(db.database) },
+    {
+      provide: AlertIngestionService,
+      inject: [DatabaseService, IncidentService],
+      useFactory: (db: DatabaseService, incidents: IncidentService) => new AlertIngestionService(db.database, incidents),
+    },
+    {
+      provide: AlertWebhookHandlers,
+      inject: [AlertIngestionService, APP_CONFIG],
+      useFactory: (ingestion: AlertIngestionService, config: AppConfig) => {
+        const log = createLogger(config.logLevel);
+        return new AlertWebhookHandlers(ingestion, {
+          ipLimiter: new SlidingWindowLimiter(WEBHOOK_IP_LIMIT_PER_MINUTE, ONE_MINUTE),
+          failedAuthLimiter: new SlidingWindowLimiter(WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES, 5 * ONE_MINUTE),
+          integrationLimiter: new SlidingWindowLimiter(WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE, ONE_MINUTE),
+          log,
+        });
+      },
+    },
+    { provide: WEBHOOK_BODY_LIMIT, inject: [APP_CONFIG], useFactory: (config: AppConfig) => config.http.webhookBodyLimitBytes },
     {
       provide: JOB_WORKER,
       inject: [DatabaseService, JobQueue, APP_CONFIG, ANALYSIS_PROVIDER],
@@ -103,9 +132,9 @@ const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
     RealtimeService,
     {
       provide: ApiHandlers,
-      inject: [AuthService, OrganizationService, IncidentService, AnalysisService, APP_CONFIG, RealtimeHub],
-      useFactory: (auth: AuthService, orgs: OrganizationService, incidents: IncidentService, analysis: AnalysisService, config: AppConfig, hub: RealtimeHub) =>
-        new ApiHandlers(auth, orgs, incidents, analysis, {
+      inject: [AuthService, OrganizationService, IncidentService, AnalysisService, IntegrationService, APP_CONFIG, RealtimeHub],
+      useFactory: (auth: AuthService, orgs: OrganizationService, incidents: IncidentService, analysis: AnalysisService, integrations: IntegrationService, config: AppConfig, hub: RealtimeHub) =>
+        new ApiHandlers(auth, orgs, incidents, analysis, integrations, {
           allowedOrigins: config.http.corsOrigins,
           secureCookies: config.nodeEnv === "production",
           sessionTtlSeconds: config.auth.sessionTtlSeconds,

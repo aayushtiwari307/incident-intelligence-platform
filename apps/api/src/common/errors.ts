@@ -11,6 +11,10 @@ export type ErrorCode =
   | "RATE_LIMITED"
   | "FEATURE_DISABLED"
   | "ORIGIN_NOT_ALLOWED"
+  | "PAYLOAD_TOO_LARGE"
+  | "UNSUPPORTED_MEDIA_TYPE"
+  | "ALERTS_TRUNCATED"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL";
 
 const STATUS: Record<ErrorCode, number> = {
@@ -24,6 +28,11 @@ const STATUS: Record<ErrorCode, number> = {
   RATE_LIMITED: 429,
   FEATURE_DISABLED: 409,
   ORIGIN_NOT_ALLOWED: 403,
+  PAYLOAD_TOO_LARGE: 413,
+  UNSUPPORTED_MEDIA_TYPE: 415,
+  // 5xx on purpose: Alertmanager retries 5xx responses (and, by default, nothing else that is not 2xx).
+  ALERTS_TRUNCATED: 503,
+  SERVICE_UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 
@@ -64,6 +73,11 @@ export function rateLimited(retryAfterSeconds: number): AppError {
   });
 }
 
+/** A temporary, retryable failure. 503 + Retry-After: Alertmanager retries 5xx; it does not retry 429 or other 4xx. */
+export function serviceUnavailable(retryAfterSeconds: number, message = "The service is temporarily unable to process this request; retry later"): AppError {
+  return new AppError("SERVICE_UNAVAILABLE", message, { headers: { "Retry-After": String(Math.max(1, Math.ceil(retryAfterSeconds))) } });
+}
+
 /** PostgreSQL error codes the services translate into domain errors. */
 export const PG = {
   uniqueViolation: "23505",
@@ -71,6 +85,8 @@ export const PG = {
   checkViolation: "23514",
   serializationFailure: "40001",
   deadlock: "40P01",
+  lockNotAvailable: "55P03",
+  queryCanceled: "57014",
 } as const;
 
 export const pgCode = (error: unknown): string | undefined =>

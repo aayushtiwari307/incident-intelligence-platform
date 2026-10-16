@@ -184,6 +184,17 @@ Replace the example with the actual tunnel URL (scheme and hostname only, no pat
 
 Optional: `REDIS_URL` may be set but nothing uses it. Negative control for the realtime checks: start the API with `REALTIME_ENABLED=false` and run `npm run smoke:stack`; it must fail at a `realtime:` check.
 
+## Alertmanager integration (Milestone 7)
+
+Apply migration 0007 (`npm run migrate`, or restart the API with `MIGRATE_ON_START=apply`). On the **Team** page (owner/admin) create an integration; the token is shown once. Then send synthetic alerts (loopback only, fake data):
+
+| CMD | PowerShell |
+|-----|-----------|
+| `set ALERTMANAGER_SIM_TOKEN=YOUR_TOKEN` | `$env:ALERTMANAGER_SIM_TOKEN = "YOUR_TOKEN"` |
+| `npm run simulate:alertmanager -- --base-url http://127.0.0.1:8080` | same |
+
+Without the edge proxy use the API address, `http://127.0.0.1:3001`. Optional env: `WEBHOOK_BODY_LIMIT_BYTES` (default 1048576). Webhook rate limits are in memory, per process. The M7 integration tests need the same `TEST_DATABASE_URL` as the other integration tests. Full guide: `docs/integrations/alertmanager.md`.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

@@ -87,6 +87,22 @@ const toEventDto = (r: EventRow): IncidentEventDto => ({
 
 const ASSIGNEE_FK = "incidents_assignee_membership_fkey";
 
+/** Who an audit entry is attributed to. An AuthContext satisfies it; automation uses a null userId and a descriptive label. */
+export interface Actor {
+  userId: string | null;
+  displayName: string;
+}
+
+export interface AlertIncidentInput {
+  organizationId: string;
+  title: string;
+  description: string;
+  severity: IncidentDto["severity"];
+  actor: Actor;
+  /** Extra, already-bounded keys for the "created" timeline entry (e.g. source, fingerprint). */
+  eventPayload: Record<string, unknown>;
+}
+
 function assigneeNotMember(): AppError {
   return new AppError("VALIDATION_FAILED", "The assignee must be a member of this organization", {
     details: [{ path: "assigneeId", message: "Must be a member of this organization" }],
@@ -108,20 +124,14 @@ export class IncidentService {
 
     try {
       const id = await this.db.tx(async (tx) => {
-        // Atomic per-organization counter; concurrent creations serialise on this row and get distinct numbers.
-        const counter = await tx.query<{ last_number: string | number }>(
-          `INSERT INTO incident_counters (organization_id, last_number) VALUES ($1, 1)
-           ON CONFLICT (organization_id) DO UPDATE SET last_number = incident_counters.last_number + 1
-           RETURNING last_number`,
-          [organizationId],
-        );
-        const number = num((counter.rows[0] as { last_number: string | number }).last_number);
-        const inserted = await tx.query<{ id: string }>(
-          `INSERT INTO incidents (organization_id, number, title, description, severity, assignee_id, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-          [organizationId, number, input.title, input.description, input.severity, input.assigneeId ?? null, auth.userId],
-        );
-        const incidentId = (inserted.rows[0] as { id: string }).id;
+        const { id: incidentId, number } = await this.insertIncident(tx, {
+          organizationId,
+          title: input.title,
+          description: input.description,
+          severity: input.severity,
+          assigneeId: input.assigneeId ?? null,
+          createdBy: auth.userId,
+        });
         await this.addEvent(tx, organizationId, incidentId, "created", auth, {
           number,
           title: input.title,
@@ -251,21 +261,7 @@ export class IncidentService {
       await this.db.tx(async (tx) => {
         const current = await this.lock(tx, organizationId, incidentId);
         this.assertVersion(current, expectedVersion);
-        const from = current.status;
-        if (!canTransition(from, to)) {
-          throw new AppError("INVALID_TRANSITION", `Cannot move an incident from ${from} to ${to}`, {
-            details: { from, to, allowed: INCIDENT_TRANSITIONS[from] },
-          });
-        }
-        // Timestamps follow the status. Leaving "resolved" must clear resolved_at (a database CHECK requires it).
-        const sets = ["status = $3"];
-        if (from === "triggered") sets.push("acknowledged_at = COALESCE(acknowledged_at, now())");
-        if (to === "mitigated") sets.push("mitigated_at = now()");
-        if (to === "resolved") sets.push("resolved_at = now()");
-        if (from === "resolved") sets.push("resolved_at = NULL");
-        if (to === "investigating") sets.push("mitigated_at = NULL");
-        await tx.query(`UPDATE incidents SET ${sets.join(", ")} WHERE id = $1 AND organization_id = $2`, [incidentId, organizationId, to]);
-        await this.addEvent(tx, organizationId, incidentId, "status_changed", auth, { from, to, ...(note ? { note } : {}) });
+        await this.changeStatus(tx, organizationId, incidentId, current.status, to, auth, note ? { note } : {});
       });
       return await this.getOrThrow(this.db, organizationId, incidentId);
     } catch (error) {
@@ -292,6 +288,42 @@ export class IncidentService {
     if (!parsed.success) throw validationFailed(parsed.error);
     await this.getOrThrow(this.db, organizationId, incidentId); // 404 for other organizations' incidents
     return this.events(this.db, organizationId, incidentId, parsed.data.after, parsed.data.limit);
+  }
+
+  /**
+   * SYSTEM write used by alert ingestion, inside the caller's transaction (the caller owns the dedupe mapping, so the
+   * incident, its "created" entry and the mapping commit or roll back together). No AuthContext exists for an
+   * external sender: the organization comes from the validated integration record, `created_by` is NULL and the audit
+   * entry is attributed to the integration. AI analysis is not queued for these incidents; a responder can request it.
+   */
+  async createFromAlert(tx: SqlClient, input: AlertIncidentInput): Promise<{ id: string; number: number }> {
+    const { id, number } = await this.insertIncident(tx, {
+      organizationId: input.organizationId,
+      title: input.title,
+      description: input.description,
+      severity: input.severity,
+      assigneeId: null,
+      createdBy: null,
+    });
+    await this.addEvent(tx, input.organizationId, id, "created", input.actor, {
+      number,
+      title: input.title,
+      severity: input.severity,
+      ...input.eventPayload,
+    });
+    return { id, number };
+  }
+
+  /**
+   * SYSTEM write: resolves the incident of a resolved alert through the same status machinery as a human transition
+   * (row lock, legal-transition check, timestamps, append-only timeline entry). An incident that is already resolved
+   * is left untouched ("already_resolved"): no event, no version bump.
+   */
+  async resolveFromAlert(tx: SqlClient, organizationId: string, incidentId: string, actor: Actor, payload: Record<string, unknown>): Promise<"resolved" | "already_resolved"> {
+    const current = await this.lock(tx, organizationId, incidentId);
+    if (current.status === "resolved") return "already_resolved";
+    await this.changeStatus(tx, organizationId, incidentId, current.status, "resolved", actor, payload);
+    return "resolved";
   }
 
   /**
@@ -343,12 +375,58 @@ export class IncidentService {
     return toDto(row);
   }
 
+  /** Atomic per-organization counter + insert. Concurrent creations serialise on the counter row and get distinct numbers. */
+  private async insertIncident(
+    tx: SqlClient,
+    i: { organizationId: string; title: string; description: string; severity: IncidentDto["severity"]; assigneeId: string | null; createdBy: string | null },
+  ): Promise<{ id: string; number: number }> {
+    const counter = await tx.query<{ last_number: string | number }>(
+      `INSERT INTO incident_counters (organization_id, last_number) VALUES ($1, 1)
+       ON CONFLICT (organization_id) DO UPDATE SET last_number = incident_counters.last_number + 1
+       RETURNING last_number`,
+      [i.organizationId],
+    );
+    const number = num((counter.rows[0] as { last_number: string | number }).last_number);
+    const inserted = await tx.query<{ id: string }>(
+      `INSERT INTO incidents (organization_id, number, title, description, severity, assignee_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [i.organizationId, number, i.title, i.description, i.severity, i.assigneeId, i.createdBy],
+    );
+    return { id: (inserted.rows[0] as { id: string }).id, number };
+  }
+
+  /** The single place that applies a status change: legality check, timestamps, and the timeline entry. Caller holds the row lock. */
+  private async changeStatus(
+    tx: SqlClient,
+    organizationId: string,
+    incidentId: string,
+    from: IncidentDto["status"],
+    to: IncidentDto["status"],
+    actor: Actor,
+    extra: Record<string, unknown>,
+  ): Promise<void> {
+    if (!canTransition(from, to)) {
+      throw new AppError("INVALID_TRANSITION", `Cannot move an incident from ${from} to ${to}`, {
+        details: { from, to, allowed: INCIDENT_TRANSITIONS[from] },
+      });
+    }
+    // Timestamps follow the status. Leaving "resolved" must clear resolved_at (a database CHECK requires it).
+    const sets = ["status = $3"];
+    if (from === "triggered") sets.push("acknowledged_at = COALESCE(acknowledged_at, now())");
+    if (to === "mitigated") sets.push("mitigated_at = now()");
+    if (to === "resolved") sets.push("resolved_at = now()");
+    if (from === "resolved") sets.push("resolved_at = NULL");
+    if (to === "investigating") sets.push("mitigated_at = NULL");
+    await tx.query(`UPDATE incidents SET ${sets.join(", ")} WHERE id = $1 AND organization_id = $2`, [incidentId, organizationId, to]);
+    await this.addEvent(tx, organizationId, incidentId, "status_changed", actor, { from, to, ...extra });
+  }
+
   private async addEvent(
     tx: SqlClient,
     organizationId: string,
     incidentId: string,
     type: IncidentEventType,
-    actor: AuthContext,
+    actor: Actor,
     payload: Record<string, unknown>,
   ): Promise<number> {
     const result = await tx.query<{ id: string | number }>(
