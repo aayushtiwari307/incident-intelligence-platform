@@ -1,24 +1,21 @@
-# Milestone 7 status: Alert intake and deduplication
+# Milestone 7 verification status: Alert intake and deduplication
 
-**Status: implemented in source, NOT accepted.** Date: 2026-10-16.
+**Status: verified implementation under review in PR #2; not merged or deployed.** Updated 2026-10-17.
 
-## Evidence classes
-- **Stand-in (sandbox):** the npm registry was blocked (403), so `npm ci` never ran. Tests were run with a local stand-in: a PostgreSQL wire-protocol shim replacing the `pg` package and a Jest-like runner, against a real PostgreSQL 16 server (isolated, throw-away databases). These results are real executions of the project's test code and SQL, but **not** the real Jest/ts-jest/`pg` stack. CI is the authoritative run.
-- **Not run in the sandbox:** real Jest and ts-jest; the real `pg` driver; the NestJS controller and module wiring and the Nest e2e suites (`nest-ai`, `nest-realtime`, trust-proxy); web Jest, `next build` and web typecheck; ESLint with typescript-eslint; `npm run build`; Docker Compose validation and the stack smoke test; GitHub Actions; the browser check of the Team page. `check:deps` was inconclusive (`npm ls` could not verify the TypeScript pin).
-- **Original author evidence:** `node --test scripts/*.test.mjs` (36/36, including simulator tests) and `check:hygiene` (OK), as reported before this follow-up fix.
-- **Follow-up candidate run in the editing container:** `node --test scripts/*.test.mjs` (36/36; includes the new invalid-bearer simulator probe) and `git diff --check` passed. The container had no `node_modules`, so the API TypeScript/Jest suites, web checks, lint and production build were not rerun here.
+## Final verification evidence
 
-## What to run to accept (Windows)
-```
-npm ci
-npm run typecheck
-npm run lint
-npm test
-set TEST_DATABASE_URL=postgres://platform:YOUR_PASSWORD@127.0.0.1:5545/postgres
-npm run test:integration
-npm run build
-```
-Then, with the local stack up: create an integration on the Team page (token appears once; rotate and revoke), `set ALERTMANAGER_SIM_TOKEN=...`, `npm run simulate:alertmanager -- --base-url http://127.0.0.1:8080`. Apply migration 0007 only via the normal migrate path; never run `services:reset`.
+The earlier authoring/sandbox attempts were incomplete: registry access and Docker were unavailable, and the installed Windows PostgreSQL service was not considered safe to use as a disposable test server. Those attempts did not run the project's real database integration suite. They are historical and superseded by the isolated verification below.
 
-## Not guaranteed by tests
-Cross-instance rate limiting (per process by design) and behaviour of a real Alertmanager against this endpoint (only a synthetic simulator was used). This follow-up candidate adds regression and concurrent-delivery integration tests for resolved-before-firing tombstones; those tests require `TEST_DATABASE_URL` pointing to an isolated disposable PostgreSQL server and have not been run in this authoring environment.
+- **Quality checks passed on the candidate:** `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:deps`, `npm run check:hygiene`, and `git diff --check`.
+- **PostgreSQL integration tests passed:** 16 suites, 214 tests, using the real Jest/ts-jest/`pg` stack against a newly initialized, disposable PostgreSQL 17 cluster. The cluster was bound only to `127.0.0.1`; its data directory, port, listener address, `postgres` identity, superuser/`CREATEDB` privileges and connection URI were verified before tests ran. The harness created uniquely named scratch databases, applied migrations and dropped them after use.
+- Integration coverage includes resolved-before-firing followed by delayed firing, a legitimate new cycle with a different `startsAt`, concurrent duplicate deliveries, token rotation and revocation, organization isolation, transaction rollback, and webhook authentication/invalid credentials.
+- **Live candidate API simulator passed:** 11 checks, including invalid-token HTTP 401 with `UNAUTHENTICATED`. It ran against the actual candidate API on loopback using a throwaway organization and integration, not the simulator's fake-server test.
+- **Packaging checks passed:** the source ZIP contained the committed source snapshot and extracted successfully; `git apply --check` passed in a disposable worktree at the accepted baseline.
+- The temporary PostgreSQL cluster, integration scratch databases, candidate API process and process-scoped test configuration were cleaned up or restored.
+- Integration and live API checks were run before packaging; they were not repeated during packaging.
+
+## Limitations and release state
+
+- Rate limiting is currently in-memory and per process; it is not shared across API instances.
+- A real external Alertmanager deployment was not tested; the live verification used the synthetic simulator against the candidate API.
+- M7 is under review in PR #2. It has not been merged or deployed.
