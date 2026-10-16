@@ -4,6 +4,9 @@ import { AuthService, type AuthContext } from "../auth/auth.service";
 import { PasswordHasher } from "../auth/password";
 import { Database } from "../common/sql";
 import { runMigrations } from "../db/migrate/runner";
+import { AlertIngestionService } from "../alerts/alert-ingestion.service";
+import { IntegrationService } from "../alerts/integration.service";
+import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
 import { AnalysisJobHandler } from "../analysis/analysis.handler";
 import { AnalysisService } from "../analysis/analysis.service";
 import type { AnalysisProvider } from "../analysis/provider";
@@ -30,6 +33,11 @@ export interface TestApp {
   organizations: OrganizationService;
   incidents: IncidentService;
   handlers: ApiHandlers;
+  integrations: IntegrationService;
+  ingestion: AlertIngestionService;
+  /** The webhook handler with its own (generous by default) limiters; tests lower them through `webhookLimiters`. */
+  webhook: AlertWebhookHandlers;
+  webhookLimiters: { ip: SlidingWindowLimiter; failedAuth: SlidingWindowLimiter; integration: SlidingWindowLimiter };
   queue: JobQueue;
   analysis: AnalysisService;
   /** A worker over the real handler; tests drive it with runOnce(). Null when no provider was supplied. */
@@ -50,6 +58,9 @@ export interface TestAppOptions {
   /** Supplying a provider turns the AI feature on (otherwise it is off, like AI_PROVIDER=none). */
   provider?: AnalysisProvider;
   workerLeaseSeconds?: number;
+  webhookLimits?: { ip?: number; failedAuth?: number; integration?: number };
+  /** Clock for startsAt range validation (default: real time). */
+  now?: () => Date;
 }
 
 /** A complete service stack on a fresh real PostgreSQL database with all migrations applied. */
@@ -96,11 +107,25 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     return { ...user, auth: context };
   };
 
-  const handlers = new ApiHandlers(auth, organizations, incidents, analysis, {
+  const integrations = new IntegrationService(database);
+  const ingestion = new AlertIngestionService(database, incidents);
+  const webhookLimiters = {
+    ip: new SlidingWindowLimiter(options.webhookLimits?.ip ?? 10_000, 60_000),
+    failedAuth: new SlidingWindowLimiter(options.webhookLimits?.failedAuth ?? 10_000, 300_000),
+    integration: new SlidingWindowLimiter(options.webhookLimits?.integration ?? 10_000, 60_000),
+  };
+  const webhook = new AlertWebhookHandlers(ingestion, {
+    ipLimiter: webhookLimiters.ip,
+    failedAuthLimiter: webhookLimiters.failedAuth,
+    integrationLimiter: webhookLimiters.integration,
+    ...(options.now ? { now: options.now } : {}),
+  });
+
+  const handlers = new ApiHandlers(auth, organizations, incidents, analysis, integrations, {
     allowedOrigins: ["http://localhost:3000"],
     secureCookies: false,
     sessionTtlSeconds: options.sessionTtlSeconds ?? 3600,
   });
 
-  return { testDb, database, auth, organizations, incidents, handlers, queue, analysis, worker, newWorker, limiters, register, join, close: () => testDb.drop() };
+  return { testDb, database, auth, organizations, incidents, handlers, integrations, ingestion, webhook, webhookLimiters, queue, analysis, worker, newWorker, limiters, register, join, close: () => testDb.drop() };
 }

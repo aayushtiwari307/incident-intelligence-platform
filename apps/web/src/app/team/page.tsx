@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { canChangeRole, canRemoveMember, type MemberDto, type OrgRole } from "@platform/shared";
 import { AppShell, useCan } from "../../components/shell";
+import { IntegrationsPanel } from "../../components/integrations-panel";
 import { Field, FormError } from "../../components/ui";
 import type { CreatedInvite, InviteSummary } from "../../lib/api-client";
 import { ROLE_LABEL, errorText, relativeTime } from "../../lib/format";
@@ -21,6 +22,7 @@ const ROLES: OrgRole[] = ["viewer", "responder", "admin", "owner"];
 function Team() {
   const { state, refresh } = useSession();
   const canInvite = useCan("member:invite");
+  const canManageIntegrations = useCan("integration:manage");
   const me = state.status === "authenticated" ? state.me : null;
   const [members, setMembers] = useState<MemberDto[]>([]);
   const [invites, setInvites] = useState<InviteSummary[]>([]);
@@ -210,6 +212,8 @@ function Team() {
           ) : null}
         </section>
       ) : null}
+
+      {canManageIntegrations ? <IntegrationsPanel /> : null}
 
       <AcceptInvite onAccepted={refresh} />
     </>

@@ -30,7 +30,8 @@
     "dev:web": "npm run build -w @platform/shared && npm run dev -w @platform/web",
     "health": "node scripts/check-health.mjs",
     "smoke:stack": "node scripts/smoke-stack.mjs",
-    "services:reset": "docker compose down -v && docker compose up -d --wait"
+    "services:reset": "docker compose down -v && docker compose up -d --wait",
+    "simulate:alertmanager": "node scripts/simulate-alertmanager.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

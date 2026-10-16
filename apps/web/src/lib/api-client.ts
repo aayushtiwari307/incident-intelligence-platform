@@ -1,4 +1,6 @@
 import type {
+  CreatedIntegrationDto,
+  IntegrationDto,
   IncidentDto,
   IncidentEventDto,
   IncidentListDto,
@@ -73,6 +75,12 @@ export interface ApiClient {
   createInvite(input: { email: string; role: InviteSummary["role"] }): Promise<CreatedInvite>;
   revokeInvite(id: string): Promise<void>;
   acceptInvite(token: string): Promise<MeDto>;
+  listIntegrations(): Promise<IntegrationDto[]>;
+  /** The returned token is shown once and cannot be retrieved again. */
+  createIntegration(name: string): Promise<CreatedIntegrationDto>;
+  /** Replaces the secret; the returned token is shown once and the old one stops working immediately. */
+  rotateIntegration(id: string): Promise<CreatedIntegrationDto>;
+  revokeIntegration(id: string): Promise<IntegrationDto>;
   listIncidents(filters?: IncidentFilters): Promise<IncidentListDto>;
   getIncident(id: string): Promise<IncidentDto>;
   createIncident(input: { title: string; description: string; severity: IncidentSeverity; assigneeId?: string | null }): Promise<IncidentDto>;
@@ -138,6 +146,10 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = (i, init
     createInvite: (input) => request("POST", "/api/organization/invites", input),
     revokeInvite: (id) => request("DELETE", `/api/organization/invites/${enc(id)}`),
     acceptInvite: (token) => request("POST", "/api/organization/invites/accept", { token }),
+    listIntegrations: async () => (await request<{ items: IntegrationDto[] }>("GET", "/api/organization/integrations")).items,
+    createIntegration: (name) => request("POST", "/api/organization/integrations", { name }),
+    rotateIntegration: (id) => request("POST", `/api/organization/integrations/${enc(id)}/rotate`, {}),
+    revokeIntegration: (id) => request("DELETE", `/api/organization/integrations/${enc(id)}`),
     listIncidents: (f = {}) =>
       request("GET", "/api/incidents", undefined, { status: f.status, severity: f.severity, assignee: f.assignee, cursor: f.cursor, limit: f.limit }),
     getIncident: (id) => request("GET", `/api/incidents/${enc(id)}`),

@@ -13,6 +13,13 @@ describe("action permissions", () => {
     assert.equal(can("owner", "member:setRole"), true);
   });
 
+  it("only admins and owners manage integration credentials", () => {
+    assert.equal(can("viewer", "integration:manage"), false);
+    assert.equal(can("responder", "integration:manage"), false);
+    assert.equal(can("admin", "integration:manage"), true);
+    assert.equal(can("owner", "integration:manage"), true);
+  });
+
   it("no role means no permission", () => {
     assert.equal(can(null, "incident:read"), false);
     assert.equal(can(undefined, "incident:read"), false);

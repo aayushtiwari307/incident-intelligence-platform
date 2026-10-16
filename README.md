@@ -1,7 +1,7 @@
 # Incident platform (working title)
 
 Incident operations platform: NestJS API, Next.js web app, PostgreSQL, a PostgreSQL-backed durable job queue, and optional AI assistance.
-Early development. Implemented: accounts and organizations, roles, invitations, incident lifecycle with an audit timeline. Also implemented: a durable PostgreSQL job queue and optional AI incident analysis (off by default). The queue does not use BullMQ or Redis, and there is no Redis service (`REDIS_URL` is optional and unused). Implemented (merged in M4) but not yet verified at runtime in a real browser: secure Socket.IO real-time incident updates (ADR 0016). Milestone 5 (ADR 0017, `docs/verification/milestone-5-status.md`) adds WebSocket smoke checks, an optional single-origin proxy and audit records; it is implemented in source and **not accepted**. Not yet implemented: GitHub issue enrichment, or deployment. See `docs/decisions` (start with 0010) for what exists and what is explicitly not done.
+Early development. Implemented: accounts and organizations, roles, invitations, incident lifecycle with an audit timeline. Also implemented: a durable PostgreSQL job queue and optional AI incident analysis (off by default). The queue does not use BullMQ or Redis, and there is no Redis service (`REDIS_URL` is optional and unused). Implemented (merged in M4) but not yet verified at runtime in a real browser: secure Socket.IO real-time incident updates (ADR 0016). Milestone 5 (ADR 0017, `docs/verification/milestone-5-status.md`) adds WebSocket smoke checks, an optional single-origin proxy and audit records; it is implemented in source and **not accepted**. Milestone 7 (ADR 0018, `docs/integrations/alertmanager.md`, `docs/verification/milestone-7-status.md`) adds a Bearer-authenticated Alertmanager webhook with transactional alert-cycle deduplication; it is implemented in source and **not accepted**. Not yet implemented: GitHub issue enrichment, or deployment. See `docs/decisions` (start with 0010) for what exists and what is explicitly not done.
 
 ## Requirements
 Node >= 22.12 (see `.nvmrc`), Docker, npm 10+.
@@ -35,6 +35,7 @@ npm run test:integration     # needs TEST_DATABASE_URL, see docs/DEVELOPMENT.md
 - `apps/api` NestJS API, SQL migrations in `apps/api/migrations`
 - `apps/web` Next.js app
 - `packages/shared` Zod schemas shared by both
+- `docs/integrations` integration guides (Alertmanager)
 - `docs/decisions` architecture decision records, `docs/spikes` evidence for them
 
 No licence has been chosen for this project's own code yet (owner decision).

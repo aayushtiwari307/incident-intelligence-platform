@@ -2,6 +2,7 @@ import type { MeDto } from "@platform/shared";
 import { AuthService, type AuthContext } from "../auth/auth.service";
 import { AppError, unauthenticated } from "../common/errors";
 import { AnalysisService } from "../analysis/analysis.service";
+import { IntegrationService } from "../alerts/integration.service";
 import { IncidentService } from "../incidents/incident.service";
 import { OrganizationService } from "../organizations/organization.service";
 import { clearedSessionCookie, parseCookies, sessionCookie, sessionCookieName } from "./cookies";
@@ -40,6 +41,7 @@ export class ApiHandlers {
     private readonly organizations: OrganizationService,
     private readonly incidents: IncidentService,
     private readonly analysis: AnalysisService,
+    private readonly integrations: IntegrationService,
     private readonly options: ApiHandlersOptions,
   ) {}
 
@@ -194,5 +196,25 @@ export class ApiHandlers {
   /** 202: the work is queued, not done. The client polls `analysisState`. */
   async requestAnalysis(req: HttpRequest): Promise<HttpResult> {
     return ok(await this.analysis.request(await this.authenticate(req), req.params.id ?? ""), 202);
+  }
+
+  // ---- integrations (session-authenticated management; the webhook itself is AlertWebhookHandlers) -------------------
+
+  async listIntegrations(req: HttpRequest): Promise<HttpResult> {
+    return ok({ items: await this.integrations.list(await this.authenticate(req)) });
+  }
+
+  /** 201 with the plaintext token, shown exactly once. `no-store` keeps it out of caches. */
+  async createIntegration(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.integrations.create(await this.authenticate(req), req.body), 201);
+  }
+
+  /** The plaintext token of the NEW secret, shown exactly once; the previous token is already invalid. */
+  async rotateIntegration(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.integrations.rotate(await this.authenticate(req), req.params.id ?? ""));
+  }
+
+  async revokeIntegration(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.integrations.revoke(await this.authenticate(req), req.params.id ?? ""));
   }
 }

@@ -54,4 +54,18 @@ describe("SlidingWindowLimiter", () => {
     for (let i = 0; i < 1_000; i++) limiter.consume(`ip-${i}`);
     assert.ok(limiter.size <= 100);
   });
+
+  it("peek reports the limit without counting an attempt", () => {
+    const c = clock();
+    const limiter = new SlidingWindowLimiter(2, 10_000, c.now);
+    assert.equal(limiter.peek("k").allowed, true);
+    assert.equal(limiter.peek("k").allowed, true); // peeking never consumes
+    limiter.consume("k");
+    limiter.consume("k");
+    const blocked = limiter.peek("k");
+    assert.equal(blocked.allowed, false);
+    assert.equal(blocked.retryAfterSeconds, 10);
+    c.advance(10_001);
+    assert.equal(limiter.peek("k").allowed, true);
+  });
 });
