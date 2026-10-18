@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: incident-intelligence-free-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_PROVIDER
+        value: none
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_DAILY_REQUEST_LIMIT
+        value: "20"
+      - key: REALTIME_ENABLED
+        value: "false"
+      - key: MIGRATE_ON_START
+        value: check
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        sync: false

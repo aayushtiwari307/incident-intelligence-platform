@@ -2,20 +2,25 @@ import {
   canTransition,
   commentSchema,
   createIncidentSchema,
+  createResolutionSchema,
   incidentListQuerySchema,
   INCIDENT_TRANSITIONS,
   timelineQuerySchema,
   transitionIncidentSchema,
+  updateResolutionSchema,
   updateIncidentSchema,
   uuidSchema,
   type IncidentDto,
   type IncidentEventDto,
   type IncidentEventType,
   type IncidentListDto,
+  type IncidentResolutionDto,
   type IncidentRealtimeMessage,
+  type SimilarIncidentDto,
+  type SimilarIncidentsDto,
 } from "@platform/shared";
 import type { AuthContext } from "../auth/auth.service";
-import { AppError, PG, notFound, pgCode, validationFailed } from "../common/errors";
+import { AppError, PG, forbidden, notFound, pgCode, validationFailed } from "../common/errors";
 import { authorize } from "../common/authz";
 import type { Database, SqlClient } from "../common/sql";
 import { iso, jsonObject, num } from "../common/sql-helpers";
@@ -75,6 +80,59 @@ interface EventRow {
   actor_label: string;
   payload: unknown;
   created_at: string;
+}
+
+interface ResolutionRow {
+  incident_id: string;
+  root_cause: string;
+  fix_applied: string;
+  resolved_by: string | null;
+  version: string | number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SimilarSourceRow {
+  title: string;
+  description: string;
+  root_cause: string | null;
+  fix_applied: string | null;
+}
+
+interface SimilarIncidentRow {
+  id: string;
+  number: string | number;
+  title: string;
+  description: string;
+  severity: IncidentDto["severity"];
+  resolved_at: string | null;
+  root_cause: string | null;
+  fix_applied: string | null;
+  matched_terms: string[];
+}
+
+const RESOLUTION_COLUMNS = `
+  incident_id, root_cause, fix_applied, resolved_by, version,
+  ${iso("created_at")} AS created_at, ${iso("updated_at")} AS updated_at`;
+
+function resolutionDto(row: ResolutionRow): IncidentResolutionDto {
+  return {
+    incidentId: row.incident_id,
+    rootCause: row.root_cause,
+    fixApplied: row.fix_applied,
+    resolvedBy: row.resolved_by,
+    version: num(row.version),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const MAX_SIMILAR_TERMS = 12;
+
+function similarSearchTerms(text: string): string[] {
+  return [...new Set(text.match(/[\p{L}\p{N}]+/gu)?.map((term) => term.toLocaleLowerCase("en-US")) ?? [])]
+    .filter((term) => term.length <= 64)
+    .slice(0, MAX_SIMILAR_TERMS);
 }
 
 const toEventDto = (r: EventRow): IncidentEventDto => ({
@@ -189,6 +247,115 @@ export class IncidentService {
     return this.getOrThrow(this.db, organizationId, incidentId);
   }
 
+  async getResolution(auth: AuthContext, incidentId: string): Promise<IncidentResolutionDto> {
+    const organizationId = authorize(auth, "incident:read");
+    await this.getOrThrow(this.db, organizationId, incidentId);
+    const result = await this.db.query<ResolutionRow>(
+      `SELECT ${RESOLUTION_COLUMNS} FROM incident_resolutions
+       WHERE organization_id = $1 AND incident_id = $2`,
+      [organizationId, incidentId],
+    );
+    const row = result.rows[0];
+    if (!row) throw notFound("Resolution");
+    return resolutionDto(row);
+  }
+
+  async similar(auth: AuthContext, incidentId: string): Promise<SimilarIncidentsDto> {
+    const organizationId = authorize(auth, "incident:read");
+    const found = await this.findSimilar(organizationId, incidentId);
+    return {
+      // Explicit field list: the public response must never grow a field (such as the description) by accident.
+      results: found.map(
+        (row): SimilarIncidentDto => ({
+          id: row.id,
+          number: row.number,
+          title: row.title,
+          severity: row.severity,
+          resolvedAt: row.resolvedAt,
+          rootCause: row.rootCause,
+          fixApplied: row.fixApplied,
+          matchedTerms: row.matchedTerms,
+        }),
+      ),
+    };
+  }
+
+  /**
+   * SYSTEM read for the grounded-AI context builder (no AuthContext: the caller passes the organization of a request it
+   * already authorized, or of a job row the server wrote). Same retrieval, ranking and organization filter as `similar`;
+   * it additionally returns each similar incident's description, which the public DTO deliberately omits.
+   * Throws 404 when the incident is not in that organization.
+   */
+  async similarForOrganization(organizationId: string, incidentId: string): Promise<Array<SimilarIncidentDto & { description: string }>> {
+    return this.findSimilar(organizationId, incidentId);
+  }
+
+  private async findSimilar(organizationId: string, incidentId: string): Promise<Array<SimilarIncidentDto & { description: string }>> {
+    if (!uuidSchema.safeParse(incidentId).success) throw notFound("Incident");
+
+    const sourceResult = await this.db.query<SimilarSourceRow>(
+      `SELECT i.title, i.description, r.root_cause, r.fix_applied
+         FROM incidents i
+         LEFT JOIN incident_resolutions r
+           ON r.organization_id = i.organization_id AND r.incident_id = i.id
+        WHERE i.organization_id = $1 AND i.id = $2`,
+      [organizationId, incidentId],
+    );
+    const source = sourceResult.rows[0];
+    if (!source) throw notFound("Incident");
+
+    const terms = similarSearchTerms(
+      [source.title, source.description, source.root_cause ?? "", source.fix_applied ?? ""].join(" "),
+    );
+    if (terms.length === 0) return [];
+
+    // Only sanitized alphanumeric tokens enter the tsquery expression; the expression itself is a SQL parameter.
+    const tsQuery = terms.map((term) => `${term}:*`).join(" | ");
+    const matches = await this.db.query<SimilarIncidentRow>(
+      `WITH query AS (
+         SELECT to_tsquery('english'::regconfig, $2) AS value
+       )
+       SELECT i.id, i.number, i.title, i.description, i.severity,
+              ${iso("i.resolved_at")} AS resolved_at,
+              r.root_cause, r.fix_applied,
+              ARRAY(
+                SELECT term
+                  FROM unnest($3::text[]) AS requested(term)
+                 WHERE d.search_vector @@ to_tsquery('english'::regconfig, term || ':*')
+              ) AS matched_terms
+         FROM incident_search_documents d
+         JOIN incidents i
+           ON i.organization_id = d.organization_id AND i.id = d.incident_id
+         LEFT JOIN incident_resolutions r
+           ON r.organization_id = i.organization_id AND r.incident_id = i.id
+         CROSS JOIN query q
+        WHERE d.organization_id = $1
+          AND d.incident_id <> $4
+          AND i.status = 'resolved'
+          AND numnode(q.value) > 0
+          AND d.search_vector @@ q.value
+        ORDER BY ts_rank_cd(d.search_vector, q.value, 32) DESC,
+                 i.resolved_at DESC NULLS LAST,
+                 i.number DESC
+        LIMIT 5`,
+      [organizationId, tsQuery, terms, incidentId],
+    );
+
+    return matches.rows.map(
+      (row): SimilarIncidentDto & { description: string } => ({
+        id: row.id,
+        number: num(row.number),
+        title: row.title,
+        description: row.description,
+        severity: row.severity,
+        resolvedAt: row.resolved_at,
+        rootCause: row.root_cause,
+        fixApplied: row.fix_applied,
+        matchedTerms: row.matched_terms,
+      }),
+    );
+  }
+
   async update(auth: AuthContext, incidentId: string, raw: unknown): Promise<IncidentDto> {
     const organizationId = authorize(auth, "incident:update");
     const parsed = updateIncidentSchema.safeParse(raw);
@@ -249,6 +416,110 @@ export class IncidentService {
     } catch (error) {
       throw this.translate(error);
     }
+  }
+
+  async createResolution(auth: AuthContext, incidentId: string, raw: unknown): Promise<IncidentResolutionDto> {
+    const organizationId = authorize(auth, "incident:update");
+    const parsed = createResolutionSchema.safeParse(raw);
+    if (!parsed.success) throw validationFailed(parsed.error);
+    const input = parsed.data;
+
+    return this.db.tx(async (tx) => {
+      const member = await tx.query(
+        "SELECT 1 FROM memberships WHERE organization_id = $1 AND user_id = $2 FOR KEY SHARE",
+        [organizationId, auth.userId],
+      );
+      if (member.rows.length === 0) throw forbidden();
+
+      await this.lock(tx, organizationId, incidentId);
+      const inserted = await tx.query<ResolutionRow>(
+        `INSERT INTO incident_resolutions (organization_id, incident_id, root_cause, fix_applied, resolved_by)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (organization_id, incident_id) DO NOTHING
+         RETURNING ${RESOLUTION_COLUMNS}`,
+        [organizationId, incidentId, input.rootCause, input.fixApplied, auth.userId],
+      );
+      const row = inserted.rows[0];
+      if (!row) throw new AppError("CONFLICT", "A resolution already exists for this incident");
+
+      const resolution = resolutionDto(row);
+      await this.addEvent(tx, organizationId, incidentId, "resolution_changed", auth, {
+        operation: "created",
+        version: resolution.version,
+        changes: {
+          rootCause: { from: null, to: resolution.rootCause },
+          fixApplied: { from: null, to: resolution.fixApplied },
+        },
+      });
+      return resolution;
+    });
+  }
+
+  async updateResolution(auth: AuthContext, incidentId: string, raw: unknown): Promise<IncidentResolutionDto> {
+    const organizationId = authorize(auth, "incident:update");
+    const parsed = updateResolutionSchema.safeParse(raw);
+    if (!parsed.success) throw validationFailed(parsed.error);
+    const input = parsed.data;
+
+    return this.db.tx(async (tx) => {
+      const member = await tx.query(
+        "SELECT 1 FROM memberships WHERE organization_id = $1 AND user_id = $2 FOR KEY SHARE",
+        [organizationId, auth.userId],
+      );
+      if (member.rows.length === 0) throw forbidden();
+
+      await this.lock(tx, organizationId, incidentId);
+      const found = await tx.query<ResolutionRow>(
+        `SELECT ${RESOLUTION_COLUMNS} FROM incident_resolutions
+         WHERE organization_id = $1 AND incident_id = $2 FOR UPDATE`,
+        [organizationId, incidentId],
+      );
+      const current = found.rows[0];
+      if (!current) throw notFound("Resolution");
+      if (num(current.version) !== input.expectedVersion) {
+        throw new AppError("VERSION_CONFLICT", "The resolution was changed by someone else. Reload and try again.", {
+          details: { currentVersion: num(current.version) },
+        });
+      }
+      if (current.root_cause === input.rootCause && current.fix_applied === input.fixApplied) {
+        return resolutionDto(current);
+      }
+
+      const changed = await tx.query<ResolutionRow>(
+        `UPDATE incident_resolutions
+            SET root_cause = $3, fix_applied = $4
+          WHERE organization_id = $1 AND incident_id = $2 AND version = $5
+          RETURNING ${RESOLUTION_COLUMNS}`,
+        [organizationId, incidentId, input.rootCause, input.fixApplied, input.expectedVersion],
+      );
+      const updated = changed.rows[0];
+      if (!updated) {
+        const latest = await tx.query<{ version: string | number }>(
+          "SELECT version FROM incident_resolutions WHERE organization_id = $1 AND incident_id = $2",
+          [organizationId, incidentId],
+        );
+        if (!latest.rows[0]) throw notFound("Resolution");
+        throw new AppError("VERSION_CONFLICT", "The resolution was changed by someone else. Reload and try again.", {
+          details: { currentVersion: num(latest.rows[0].version) },
+        });
+      }
+
+      const previous = resolutionDto(current);
+      const resolution = resolutionDto(updated);
+      const changes: Record<string, { from: string; to: string }> = {};
+      if (previous.rootCause !== resolution.rootCause) {
+        changes.rootCause = { from: previous.rootCause, to: resolution.rootCause };
+      }
+      if (previous.fixApplied !== resolution.fixApplied) {
+        changes.fixApplied = { from: previous.fixApplied, to: resolution.fixApplied };
+      }
+      await this.addEvent(tx, organizationId, incidentId, "resolution_changed", auth, {
+        operation: "updated",
+        version: resolution.version,
+        changes,
+      });
+      return resolution;
+    });
   }
 
   async transition(auth: AuthContext, incidentId: string, raw: unknown): Promise<IncidentDto> {
@@ -460,4 +731,3 @@ export class IncidentService {
     return { issues: [{ path: ["cursor"], message: "Invalid cursor" }] } as unknown as Parameters<typeof validationFailed>[0];
   }
 }
-

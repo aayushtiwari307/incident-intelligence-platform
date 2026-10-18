@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { IncidentRealtimeMessage, ResyncReason } from "@platform/shared";
-import { startRealtime, type RealtimeStatus } from "./realtime-client";
+import { startRealtime, startRestFallback, type RealtimeStatus } from "./realtime-client";
 import { API_URL, useSession } from "./session";
 import { createSocket } from "./socket-factory";
 
@@ -14,6 +14,7 @@ export interface RealtimeSubscriber {
 
 const MIN_RECOVERY_DELAY_MS = 5_000;
 const MAX_RECOVERY_DELAY_MS = 60_000;
+const REALTIME_ENABLED = process.env.NEXT_PUBLIC_REALTIME_ENABLED !== "false";
 
 /**
  * Keeps one live connection for the signed-in user's active organization and reports its status. The connection is
@@ -36,6 +37,13 @@ export function useRealtime(subscriber: RealtimeSubscriber): RealtimeStatus {
     if (!identity) {
       setStatus("offline");
       return;
+    }
+    if (!REALTIME_ENABLED) {
+      const fallback = startRestFallback({
+        onStatus: setStatus,
+        onSync: (reason) => latest.current.onSync(reason),
+      });
+      return () => fallback.stop();
     }
     let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
     const connection = startRealtime({

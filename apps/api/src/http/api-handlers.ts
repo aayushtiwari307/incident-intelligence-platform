@@ -2,6 +2,7 @@ import type { MeDto } from "@platform/shared";
 import { AuthService, type AuthContext } from "../auth/auth.service";
 import { AppError, unauthenticated } from "../common/errors";
 import { AnalysisService } from "../analysis/analysis.service";
+import { AiSuggestionService } from "../ai/suggestion.service";
 import { IntegrationService } from "../alerts/integration.service";
 import { IncidentService } from "../incidents/incident.service";
 import { OrganizationService } from "../organizations/organization.service";
@@ -42,6 +43,7 @@ export class ApiHandlers {
     private readonly incidents: IncidentService,
     private readonly analysis: AnalysisService,
     private readonly integrations: IntegrationService,
+    private readonly aiSuggestions: AiSuggestionService,
     private readonly options: ApiHandlersOptions,
   ) {}
 
@@ -171,8 +173,24 @@ export class ApiHandlers {
     return ok(await this.incidents.get(await this.authenticate(req), req.params.id ?? ""));
   }
 
+  async getIncidentResolution(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.incidents.getResolution(await this.authenticate(req), req.params.id ?? ""));
+  }
+
+  async similarIncidents(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.incidents.similar(await this.authenticate(req), req.params.id ?? ""));
+  }
+
   async updateIncident(req: HttpRequest): Promise<HttpResult> {
     return ok(await this.incidents.update(await this.authenticate(req), req.params.id ?? "", req.body));
+  }
+
+  async createIncidentResolution(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.incidents.createResolution(await this.authenticate(req), req.params.id ?? "", req.body), 201);
+  }
+
+  async updateIncidentResolution(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.incidents.updateResolution(await this.authenticate(req), req.params.id ?? "", req.body));
   }
 
   async transitionIncident(req: HttpRequest): Promise<HttpResult> {
@@ -196,6 +214,34 @@ export class ApiHandlers {
   /** 202: the work is queued, not done. The client polls `analysisState`. */
   async requestAnalysis(req: HttpRequest): Promise<HttpResult> {
     return ok(await this.analysis.request(await this.authenticate(req), req.params.id ?? ""), 202);
+  }
+
+  // ---- grounded AI suggestions (Milestone 9) ---------------------------------------------------------------------
+
+  async aiSettings(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.settings(await this.authenticate(req)));
+  }
+
+  async updateAiSettings(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.updateSettings(await this.authenticate(req), req.body));
+  }
+
+  async aiSuggestionState(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.state(await this.authenticate(req), req.params.id ?? ""));
+  }
+
+  /** 202: generation is queued, not done. The client polls `aiSuggestionState`. */
+  async requestAiSuggestion(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.request(await this.authenticate(req), req.params.id ?? ""), 202);
+  }
+
+  /** Returns a DRAFT only; the incident is not changed. */
+  async applyAiSuggestion(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.apply(await this.authenticate(req), req.params.id ?? "", req.params.suggestionId ?? "", req.body));
+  }
+
+  async dismissAiSuggestion(req: HttpRequest): Promise<HttpResult> {
+    return ok(await this.aiSuggestions.dismiss(await this.authenticate(req), req.params.id ?? "", req.params.suggestionId ?? ""));
   }
 
   // ---- integrations (session-authenticated management; the webhook itself is AlertWebhookHandlers) -------------------

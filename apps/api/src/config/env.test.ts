@@ -196,6 +196,48 @@ describe("AI provider is optional", () => {
   });
 });
 
+describe("grounded AI suggestions are gated by AI_ENABLED (default off)", () => {
+  const KEY = "k-test-value-123456";
+
+  it("is off by default, and a key alone does not turn it on", () => {
+    assert.equal(loadConfig(base()).ai.suggestions.enabled, false);
+    const keyed = loadConfig(base({ AI_PROVIDER: "openai", OPENAI_API_KEY: KEY })).ai;
+    assert.equal(keyed.enabled, true, "the older analysis feature keeps its own behaviour");
+    assert.equal(keyed.suggestions.enabled, false);
+    assert.match(keyed.suggestions.disabledReason ?? "", /AI_ENABLED/);
+  });
+
+  it("needs the switch AND a usable provider", () => {
+    assert.equal(loadConfig(base({ AI_ENABLED: "true" })).ai.suggestions.enabled, false, "provider none");
+    assert.match(loadConfig(base({ AI_ENABLED: "true" })).ai.suggestions.disabledReason ?? "", /AI_PROVIDER is none/);
+    assert.match(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai" })).ai.suggestions.disabledReason ?? "", /OPENAI_API_KEY/);
+    assert.match(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: KEY })).ai.suggestions.disabledReason ?? "", /not implemented/);
+    assert.equal(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY })).ai.suggestions.enabled, true);
+    assert.equal(loadConfig(base({ AI_ENABLED: "false", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY })).ai.suggestions.enabled, false);
+  });
+
+  it("parses the switch strictly and bounds the daily limit (default 20)", () => {
+    assert.ok(problemsOf(base({ AI_ENABLED: "maybe" })).some((p) => p.startsWith("AI_ENABLED:")));
+    assert.equal(loadConfig(base()).ai.suggestions.dailyRequestLimit, 20);
+    assert.equal(loadConfig(base({ AI_DAILY_REQUEST_LIMIT: "5" })).ai.suggestions.dailyRequestLimit, 5);
+    for (const bad of ["0", "-1", "1001", "many"]) assert.ok(problemsOf(base({ AI_DAILY_REQUEST_LIMIT: bad })).some((p) => p.startsWith("AI_DAILY_REQUEST_LIMIT:")), bad);
+  });
+
+  it("allows the keyless fake provider locally, keeps the older analysis off, and refuses it in production", () => {
+    const fake = loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "fake" })).ai;
+    assert.equal(fake.suggestions.enabled, true);
+    assert.equal(fake.enabled, false);
+    assert.equal(loadConfig(base({ AI_PROVIDER: "fake" })).ai.suggestions.enabled, false, "still needs AI_ENABLED");
+    assert.ok(problemsOf(base({ NODE_ENV: "production", AI_ENABLED: "true", AI_PROVIDER: "fake", CORS_ORIGINS: "https://app.example.com" })).some((p) => p.startsWith("AI_PROVIDER:")));
+  });
+
+  it("describeConfig never prints the key", () => {
+    const text = JSON.stringify(describeConfig(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY }))));
+    assert.ok(!text.includes(KEY));
+    assert.match(text, /"suggestions":\{"enabled":true/);
+  });
+});
+
 describe("secrets cannot leak through serialisation", () => {
   const config = loadConfig(base({ AI_PROVIDER: "openai", OPENAI_API_KEY: "k-live-abcdef123456" }));
 

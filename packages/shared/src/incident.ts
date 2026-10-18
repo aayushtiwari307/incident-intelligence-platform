@@ -24,7 +24,7 @@ export function canTransition(from: IncidentStatus, to: IncidentStatus): boolean
   return INCIDENT_TRANSITIONS[from].includes(to);
 }
 
-export const INCIDENT_EVENT_TYPES = ["created", "status_changed", "assigned", "severity_changed", "edited", "comment"] as const;
+export const INCIDENT_EVENT_TYPES = ["created", "status_changed", "assigned", "severity_changed", "edited", "comment", "resolution_changed"] as const;
 export type IncidentEventType = (typeof INCIDENT_EVENT_TYPES)[number];
 
 // ---------------------------------------------------------------------------------------------
@@ -71,6 +71,24 @@ export const transitionIncidentSchema = z
   .strict();
 
 export const commentSchema = z.object({ body: z.string().trim().min(1, "Comment is empty").max(5000) }).strict();
+
+const resolutionTextSchema = z.string().trim().min(1).max(2000);
+const resolutionVersionSchema = z.number().int().min(1).max(2_147_483_646);
+
+export const createResolutionSchema = z
+  .object({
+    rootCause: resolutionTextSchema,
+    fixApplied: resolutionTextSchema,
+  })
+  .strict();
+
+export const updateResolutionSchema = z
+  .object({
+    expectedVersion: resolutionVersionSchema,
+    rootCause: resolutionTextSchema,
+    fixApplied: resolutionTextSchema,
+  })
+  .strict();
 
 export const incidentListQuerySchema = z
   .object({
@@ -126,6 +144,31 @@ export interface IncidentEventDto {
   actor: { id: string | null; label: string };
   payload: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface IncidentResolutionDto {
+  incidentId: string;
+  rootCause: string;
+  fixApplied: string;
+  resolvedBy: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimilarIncidentDto {
+  id: string;
+  number: number;
+  title: string;
+  severity: IncidentSeverity;
+  resolvedAt: string | null;
+  rootCause: string | null;
+  fixApplied: string | null;
+  matchedTerms: string[];
+}
+
+export interface SimilarIncidentsDto {
+  results: SimilarIncidentDto[];
 }
 
 export interface IncidentListDto {

@@ -4,3 +4,4 @@ export * from "./incident";
 export * from "./permissions";
 export * from "./realtime";
 export * from "./integrations";
+export * from "./ai-suggestions";

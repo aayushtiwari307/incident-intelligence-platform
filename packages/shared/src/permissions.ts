@@ -9,6 +9,10 @@ export const ACTION_MIN_ROLE = {
   "incident:transition": "responder",
   "incident:comment": "responder",
   "analysis:request": "responder",
+  // Generate, turn into a draft, or dismiss a grounded AI suggestion (it never changes an incident by itself).
+  "aiSuggestion:use": "responder",
+  // Turn AI suggestions on or off for the organization (they send redacted incident text to the AI provider).
+  "ai:configure": "admin",
   "member:list": "viewer",
   "member:invite": "admin",
   "member:remove": "admin",

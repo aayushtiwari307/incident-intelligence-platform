@@ -122,7 +122,13 @@ describe("prompt and schema", () => {
 });
 
 describe("createAnalysisProvider", () => {
-  const base: AiConfig = { provider: "none", enabled: false, model: "m", timeoutMs: 1000 };
+  const base: AiConfig = {
+    provider: "none",
+    enabled: false,
+    model: "m",
+    timeoutMs: 1000,
+    suggestions: { enabled: false, dailyRequestLimit: 20 },
+  };
   it("is null unless a provider is both selected and keyed, and null for the unimplemented gemini", () => {
     assert.equal(createAnalysisProvider(base), null);
     assert.equal(createAnalysisProvider({ ...base, provider: "openai" }), null);

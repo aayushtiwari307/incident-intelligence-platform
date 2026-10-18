@@ -4,7 +4,14 @@ import type {
   IncidentDto,
   IncidentEventDto,
   IncidentListDto,
+  IncidentResolutionDto,
+  SimilarIncidentsDto,
   AnalysisStateDto,
+  AiApplyTarget,
+  AiDraftDto,
+  AiSettingsDto,
+  AiSuggestionDto,
+  AiSuggestionStateDto,
   IncidentSeverity,
   IncidentStatus,
   MeDto,
@@ -89,10 +96,19 @@ export interface ApiClient {
     input: { expectedVersion: number; title?: string; description?: string; severity?: IncidentSeverity; assigneeId?: string | null },
   ): Promise<IncidentDto>;
   transitionIncident(id: string, input: { to: IncidentStatus; expectedVersion: number; note?: string }): Promise<IncidentDto>;
+  getIncidentResolution(id: string): Promise<IncidentResolutionDto>;
+  createIncidentResolution(id: string, input: { rootCause: string; fixApplied: string }): Promise<IncidentResolutionDto>;
+  similarIncidents(id: string): Promise<SimilarIncidentsDto>;
   comment(id: string, body: string): Promise<IncidentEventDto>;
   timeline(id: string): Promise<IncidentEventDto[]>;
   analysisState(id: string): Promise<AnalysisStateDto>;
   requestAnalysis(id: string): Promise<AnalysisStateDto>;
+  aiSuggestionState(id: string): Promise<AiSuggestionStateDto>;
+  requestAiSuggestion(id: string): Promise<AiSuggestionStateDto>;
+  applyAiSuggestion(id: string, suggestionId: string, target: AiApplyTarget): Promise<AiDraftDto>;
+  dismissAiSuggestion(id: string, suggestionId: string): Promise<AiSuggestionDto>;
+  aiSettings(): Promise<AiSettingsDto>;
+  updateAiSettings(suggestionsEnabled: boolean): Promise<AiSettingsDto>;
 }
 
 /**
@@ -156,9 +172,18 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = (i, init
     createIncident: (input) => request("POST", "/api/incidents", input),
     updateIncident: (id, input) => request("PATCH", `/api/incidents/${enc(id)}`, input),
     transitionIncident: (id, input) => request("POST", `/api/incidents/${enc(id)}/transitions`, input),
+    getIncidentResolution: (id) => request("GET", `/api/incidents/${enc(id)}/resolution`),
+    createIncidentResolution: (id, input) => request("POST", `/api/incidents/${enc(id)}/resolution`, input),
+    similarIncidents: (id) => request("GET", `/api/incidents/${enc(id)}/similar`),
     comment: (id, body) => request("POST", `/api/incidents/${enc(id)}/comments`, { body }),
     analysisState: (id) => request("GET", `/api/incidents/${enc(id)}/analysis`),
     requestAnalysis: (id) => request("POST", `/api/incidents/${enc(id)}/analysis`),
+    aiSuggestionState: (id) => request("GET", `/api/incidents/${enc(id)}/ai-suggestions`),
+    requestAiSuggestion: (id) => request("POST", `/api/incidents/${enc(id)}/ai-suggestions`, {}),
+    applyAiSuggestion: (id, suggestionId, target) => request("POST", `/api/incidents/${enc(id)}/ai-suggestions/${enc(suggestionId)}/apply`, { target }),
+    dismissAiSuggestion: (id, suggestionId) => request("POST", `/api/incidents/${enc(id)}/ai-suggestions/${enc(suggestionId)}/dismiss`, {}),
+    aiSettings: () => request("GET", "/api/organization/ai-settings"),
+    updateAiSettings: (suggestionsEnabled) => request("PUT", "/api/organization/ai-settings", { suggestionsEnabled }),
     timeline: async (id) => (await request<{ items: IncidentEventDto[] }>("GET", `/api/incidents/${enc(id)}/timeline`)).items,
   };
 }

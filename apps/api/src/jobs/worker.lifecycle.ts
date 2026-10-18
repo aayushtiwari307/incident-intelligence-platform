@@ -16,7 +16,7 @@ export class WorkerLifecycle implements OnApplicationBootstrap, BeforeApplicatio
 
   onApplicationBootstrap(): void {
     if (!this.worker) {
-      log.info("job worker not started (AI analysis is disabled)");
+      log.info("job worker not started (no AI feature is enabled)");
       return;
     }
     this.worker.start();

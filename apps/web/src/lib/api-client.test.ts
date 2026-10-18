@@ -108,6 +108,34 @@ describe("api client", () => {
     assert.equal((s.calls[1] as Call).init?.body, undefined);
   });
 
+  it("uses the existing similar-incidents and resolution contracts with session credentials", async () => {
+    const similar = stub(200, { results: [] });
+    const api = createApiClient("http://api.test", similar.fetch);
+    await api.similarIncidents("incident/1");
+    assert.equal((similar.calls[0] as Call).url, "http://api.test/api/incidents/incident%2F1/similar");
+    assert.equal((similar.calls[0] as Call).init?.method, "GET");
+    assert.equal((similar.calls[0] as Call).init?.credentials, "include");
+
+    const resolution = stub(201, { incidentId: "i1", rootCause: "cause", fixApplied: "fix", version: 1 });
+    await createApiClient("http://api.test", resolution.fetch).createIncidentResolution("i1", {
+      rootCause: "cause",
+      fixApplied: "fix",
+    });
+    const call = resolution.calls[0] as Call;
+    assert.equal(call.url, "http://api.test/api/incidents/i1/resolution");
+    assert.equal(call.init?.method, "POST");
+    assert.equal(call.init?.credentials, "include");
+    assert.deepEqual(JSON.parse(String(call.init?.body)), { rootCause: "cause", fixApplied: "fix" });
+    assert.ok(!String(call.init?.body).includes("organizationId"));
+    assert.ok(!String(call.init?.body).includes("resolvedBy"));
+
+    const savedResolution = stub(200, { incidentId: "i1", rootCause: "cause", fixApplied: "fix", version: 1 });
+    await createApiClient("http://api.test", savedResolution.fetch).getIncidentResolution("incident/1");
+    assert.equal((savedResolution.calls[0] as Call).url, "http://api.test/api/incidents/incident%2F1/resolution");
+    assert.equal((savedResolution.calls[0] as Call).init?.method, "GET");
+    assert.equal((savedResolution.calls[0] as Call).init?.credentials, "include");
+  });
+
   it("integration calls use the session cookie, send no organization id and encode ids", async () => {
     const s = stub(201, { id: "i1", token: "t".repeat(43) });
     const api = createApiClient("http://api.test", s.fetch);
@@ -132,5 +160,28 @@ describe("api client", () => {
     const items = await createApiClient("http://api.test", s.fetch).listIntegrations();
     assert.equal(items.length, 1);
     assert.equal((s.calls[0] as Call).url, "http://api.test/api/organization/integrations");
+  });
+
+  it("calls the AI suggestion endpoints with only an incident id, a suggestion id and an apply target (never an organization id)", async () => {
+    const s = stub(200, {});
+    const api = createApiClient("http://api.test", s.fetch);
+    await api.aiSuggestionState("i 1");
+    await api.requestAiSuggestion("i1");
+    await api.applyAiSuggestion("i1", "s1", "comment");
+    await api.dismissAiSuggestion("i1", "s1");
+    await api.aiSettings();
+    await api.updateAiSettings(true);
+    const seen = s.calls.map((c) => `${c.init?.method} ${c.url}`);
+    assert.deepEqual(seen, [
+      "GET http://api.test/api/incidents/i%201/ai-suggestions",
+      "POST http://api.test/api/incidents/i1/ai-suggestions",
+      "POST http://api.test/api/incidents/i1/ai-suggestions/s1/apply",
+      "POST http://api.test/api/incidents/i1/ai-suggestions/s1/dismiss",
+      "GET http://api.test/api/organization/ai-settings",
+      "PUT http://api.test/api/organization/ai-settings",
+    ]);
+    assert.equal(s.calls[2]?.init?.body, JSON.stringify({ target: "comment" }));
+    assert.equal(s.calls[5]?.init?.body, JSON.stringify({ suggestionsEnabled: true }));
+    assert.ok(!s.calls.some((c) => String(c.init?.body ?? "").includes("organization")));
   });
 });

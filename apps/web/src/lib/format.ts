@@ -81,6 +81,8 @@ export function describeEvent(event: IncidentEventDto): string {
       return p.field === "title" ? `renamed the incident to “${String(p.to)}”` : `edited the ${String(p.field)}`;
     case "comment":
       return "commented";
+    case "resolution_changed":
+      return `${p.operation === "created" ? "added" : "updated"} resolution details (version ${String(p.version ?? "unknown")})`;
   }
 }
 

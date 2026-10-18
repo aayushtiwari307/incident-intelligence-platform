@@ -2,6 +2,15 @@
 
 Read `PROJECT_MEMORY.md` first, then inspect source. Actual command output and GitHub/browser evidence outrank stale notes. Never claim an unrun check passed; never weaken tests; preserve upstream MIT attribution, security invariants and applied migrations. Do not package `.env`, `node_modules`, generated build output or `.git`.
 
+## Current closeout state (2026-10-18)
+
+- M7 is merged to `main` at `3c6231502dd736f266f7defd7aba1f32a455869c` (Git merge commit for PR #2); the older M7 status below records the pre-merge state. M6 free deployment remains OUTSTANDING.
+- M8 implementation includes migrations 0008–0011, resolution and similar-incidents APIs, incident-detail UI, and search evaluation. Focused closeout checks passed: four real-PostgreSQL API/HTTP integration suites (24 tests), web Jest (6 suites/61 tests), API/web typechecks, shared build, repository lint, and web production build. This was not a rerun of every workspace test suite.
+- Browser smoke exercised authenticated incident detail, empty and populated similar results, candidate navigation, an injected request error and retry, optional blank resolution, persisted resolution display, and recovery after an injected status-transition version conflict. This was on a local disposable database; realtime was disabled, so WebSocket behavior is explicitly unverified.
+- Fresh confirmatory retrieval evaluation: weighted English Recall@5 0.8229 vs weighted simple 0.6042 (+0.2188), meeting the predeclared +0.10 point-estimate gate. The paired scenario-bootstrap interval [+0.0938, +0.3438] has a lower bound below +0.10. Results use a single-author synthetic corpus, not human labels or production data; two recorded runs were byte-identical. See `verification/m8-confirmatory-evaluation.md`. The earlier protocol-corrected corpus report is separate.
+- M9 grounded AI implementation is locally verified: 445 native unit tests, 257 real-PostgreSQL API integration tests, typecheck, ESLint, shared/API/web builds, and migration CLI checks through 0012 passed. No live provider request or deployment was performed. See `verification/milestone-9-status.md`.
+- Closeout made no M8 commit/PR/merge/deployment and provides no production proof. M1–M5 historical acceptance claims have an evidence discrepancy: the retained M5 status ledger says NOT ACCEPTED; see `PROJECT_MEMORY.md` before making a blanket claim.
+
 ## Current source and status
 - **Accepted Milestone 2.1:** `incident-platform-milestone2.1-windows-verified.zip` (fallback baseline).
 - **Accepted Milestone 3:** GitHub commit `8e0a1d3` on `main`, repository `https://github.com/aayushtiwari307/incident-intelligence-platform`.

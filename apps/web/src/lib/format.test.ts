@@ -39,6 +39,8 @@ describe("describeEvent", () => {
     assert.equal(describeEvent(ev("severity_changed", { from: "sev3", to: "sev1" })), "changed severity from SEV3 to SEV1");
     assert.equal(describeEvent(ev("edited", { field: "description" })), "edited the description");
     assert.equal(describeEvent(ev("comment", { body: "x" })), "commented");
+    assert.equal(describeEvent(ev("resolution_changed", { operation: "created", version: 1 })), "added resolution details (version 1)");
+    assert.equal(describeEvent(ev("resolution_changed", { operation: "updated", version: 2 })), "updated resolution details (version 2)");
   });
   it("does not interpret markup: the text is returned verbatim for React to escape", () => {
     assert.equal(describeEvent(ev("edited", { field: "title", to: "<img src=x onerror=alert(1)>" })), "renamed the incident to “<img src=x onerror=alert(1)>”");
