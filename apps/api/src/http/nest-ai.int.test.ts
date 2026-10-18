@@ -225,8 +225,22 @@ describe("Nest HTTP to PostgreSQL queue to mocked OpenAI end-to-end", () => {
     assert.ok(Array.isArray(items));
     assert.ok(items.some((event) => event.type === "severity_changed" && event.payload?.to === "sev1"), "applied severity must produce the ordinary audit event");
 
+    const savedResolution = await request(`/api/incidents/${incidentId}/resolution`, {
+      method: "POST",
+      cookie,
+      body: { rootCause: "Saturated connection pool", fixApplied: "Expanded pool capacity" },
+    });
+    assert.equal(savedResolution.response.status, 201, JSON.stringify(savedResolution.body));
+    const readResolution = await request(`/api/incidents/${incidentId}/resolution`, { cookie });
+    assert.equal(readResolution.response.status, 200, JSON.stringify(readResolution.body));
+    assert.equal(readResolution.body?.rootCause, "Saturated connection pool");
+    const similar = await request(`/api/incidents/${incidentId}/similar`, { cookie });
+    assert.equal(similar.response.status, 200, JSON.stringify(similar.body));
+    assert.deepEqual(similar.body, { results: [] });
+
     const unauthorized = await request(`/api/incidents/${incidentId}/analysis`);
     assert.equal(unauthorized.response.status, 401, "real Nest auth middleware must reject requests without a session");
+    assert.equal((await request(`/api/incidents/${incidentId}/similar`)).response.status, 401);
 
     // Tenant isolation through the real HTTP stack: another organization's owner cannot read or trigger analysis
     // for this incident (not-found, never forbidden), and nothing reaches the provider on their behalf.
@@ -244,6 +258,11 @@ describe("Nest HTTP to PostgreSQL queue to mocked OpenAI end-to-end", () => {
     assert.ok(otherCookie.startsWith("sid="));
     const crossRead = await request(`/api/incidents/${incidentId}/analysis`, { cookie: otherCookie });
     assert.equal(crossRead.response.status, 404, "another tenant must not see this incident's analysis");
+    assert.equal(
+      (await request(`/api/incidents/${incidentId}/similar`, { cookie: otherCookie })).response.status,
+      404,
+      "another tenant must not see this incident's similar results",
+    );
     const crossRequest = await request(`/api/incidents/${incidentId}/analysis`, { method: "POST", cookie: otherCookie });
     assert.equal(crossRequest.response.status, 404, "another tenant must not trigger analysis");
     assert.equal(providerRequests.length, 2, "a cross-tenant request must not reach the provider");

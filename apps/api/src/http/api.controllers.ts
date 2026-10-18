@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Patch, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Inject, Patch, Post, Put, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
 import { ApiHandlers } from "./api-handlers";
@@ -122,9 +122,29 @@ export class IncidentController {
     return send(res, await this.h.getIncident(toHttpRequest(req, undefined)));
   }
 
+  @Get(":id/resolution")
+  async getResolution(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.getIncidentResolution(toHttpRequest(req, undefined)));
+  }
+
+  @Get(":id/similar")
+  async similar(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.similarIncidents(toHttpRequest(req, undefined)));
+  }
+
   @Patch(":id")
   async update(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
     return send(res, await this.h.updateIncident(toHttpRequest(req, body)));
+  }
+
+  @Post(":id/resolution")
+  async createResolution(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, await this.h.createIncidentResolution(toHttpRequest(req, body)));
+  }
+
+  @Put(":id/resolution")
+  async updateResolution(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, await this.h.updateIncidentResolution(toHttpRequest(req, body)));
   }
 
   @Post(":id/transitions")
@@ -151,6 +171,43 @@ export class IncidentController {
   @Post(":id/analysis")
   async requestAnalysis(@Req() req: Request, @Res() res: Response) {
     return send(res, await this.h.requestAnalysis(toHttpRequest(req, undefined)));
+  }
+
+  @Get(":id/ai-suggestions")
+  async aiSuggestionState(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.aiSuggestionState(toHttpRequest(req, undefined)));
+  }
+
+  @Post(":id/ai-suggestions")
+  async requestAiSuggestion(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.requestAiSuggestion(toHttpRequest(req, undefined)));
+  }
+
+  @Post(":id/ai-suggestions/:suggestionId/apply")
+  @HttpCode(200)
+  async applyAiSuggestion(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, await this.h.applyAiSuggestion(toHttpRequest(req, body)));
+  }
+
+  @Post(":id/ai-suggestions/:suggestionId/dismiss")
+  @HttpCode(200)
+  async dismissAiSuggestion(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.dismissAiSuggestion(toHttpRequest(req, undefined)));
+  }
+}
+
+@Controller("api/organization/ai-settings")
+export class AiSettingsController {
+  constructor(@Inject(ApiHandlers) private readonly h: ApiHandlers) {}
+
+  @Get()
+  async get(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.h.aiSettings(toHttpRequest(req, undefined)));
+  }
+
+  @Put()
+  async put(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, await this.h.updateAiSettings(toHttpRequest(req, body)));
   }
 }
 

@@ -5,8 +5,10 @@ import {
   canTransition,
   commentSchema,
   createIncidentSchema,
+  createResolutionSchema,
   incidentListQuerySchema,
   transitionIncidentSchema,
+  updateResolutionSchema,
   updateIncidentSchema,
 } from "./incident";
 
@@ -74,6 +76,35 @@ describe("incident request schemas", () => {
     assert.equal(commentSchema.parse({ body: "  hi  " }).body, "hi");
     assert.equal(commentSchema.safeParse({ body: "   " }).success, false);
     assert.equal(commentSchema.safeParse({ body: "x".repeat(5001) }).success, false);
+  });
+
+  it("resolution schemas require bounded nonblank text and reject client-owned fields", () => {
+    const create = createResolutionSchema.safeParse({ rootCause: "  database saturation ", fixApplied: " increased capacity " });
+    assert.equal(create.success, true);
+    if (create.success) {
+      assert.equal(create.data.rootCause, "database saturation");
+      assert.equal(create.data.fixApplied, "increased capacity");
+    }
+    for (const invalid of [
+      {},
+      { rootCause: " ", fixApplied: "fix" },
+      { rootCause: "cause", fixApplied: " ".repeat(2001) },
+      { rootCause: "x".repeat(2001), fixApplied: "fix" },
+      { rootCause: "cause", fixApplied: "fix", resolvedBy: UUID },
+      { rootCause: "cause", fixApplied: "fix", organizationId: UUID },
+      { rootCause: "cause", fixApplied: "fix", version: 99 },
+    ]) {
+      assert.equal(createResolutionSchema.safeParse(invalid).success, false);
+    }
+    assert.equal(
+      updateResolutionSchema.safeParse({ expectedVersion: 1, rootCause: "cause", fixApplied: "fix" }).success,
+      true,
+    );
+    assert.equal(updateResolutionSchema.safeParse({ expectedVersion: 0, rootCause: "cause", fixApplied: "fix" }).success, false);
+    assert.equal(
+      updateResolutionSchema.safeParse({ expectedVersion: 1, rootCause: "cause", fixApplied: "fix", version: 8 }).success,
+      false,
+    );
   });
 
   it("list query: coerces and bounds limit, accepts me/unassigned/uuid for assignee", () => {

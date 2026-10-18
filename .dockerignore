@@ -1,9 +1,13 @@
 .git
 .github
+.copilot
 .env
 **/.env
 **/.env.*
 !**/.env.example
+**/*.bak
+**/*.zip
+npm-audit-report.json
 node_modules
 **/node_modules
 dist

@@ -7,6 +7,9 @@ import { runMigrations } from "../db/migrate/runner";
 import { AlertIngestionService } from "../alerts/alert-ingestion.service";
 import { IntegrationService } from "../alerts/integration.service";
 import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
+import { AiSuggestionService } from "../ai/suggestion.service";
+import { SuggestionJobHandler } from "../ai/suggestion.handler";
+import type { SuggestionProvider } from "../ai/suggestion-provider";
 import { AnalysisJobHandler } from "../analysis/analysis.handler";
 import { AnalysisService } from "../analysis/analysis.service";
 import type { AnalysisProvider } from "../analysis/provider";
@@ -40,6 +43,9 @@ export interface TestApp {
   webhookLimiters: { ip: SlidingWindowLimiter; failedAuth: SlidingWindowLimiter; integration: SlidingWindowLimiter };
   queue: JobQueue;
   analysis: AnalysisService;
+  /** Grounded AI suggestions (M9). `serverEnabled` is true only when `suggestionProvider` was supplied. */
+  aiSuggestions: AiSuggestionService;
+  aiUserLimiter: SlidingWindowLimiter;
   /** A worker over the real handler; tests drive it with runOnce(). Null when no provider was supplied. */
   worker: JobWorker | null;
   /** Builds another worker (to prove concurrent workers never double-process). */
@@ -57,6 +63,11 @@ export interface TestAppOptions {
   sessionTtlSeconds?: number;
   /** Supplying a provider turns the AI feature on (otherwise it is off, like AI_PROVIDER=none). */
   provider?: AnalysisProvider;
+  /** Supplying a suggestion provider turns grounded AI suggestions on server-wide (otherwise: like AI_ENABLED=false). */
+  suggestionProvider?: SuggestionProvider;
+  aiDailyLimit?: number;
+  /** Per-user generate requests per 10 minutes (default: generous, so only rate-limit tests lower it). */
+  aiUserLimit?: number;
   workerLeaseSeconds?: number;
   webhookLimits?: { ip?: number; failedAuth?: number; integration?: number };
   /** Clock for startsAt range validation (default: real time). */
@@ -84,14 +95,24 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const queue = new JobQueue(database);
   const analysis = new AnalysisService(database, queue, options.provider !== undefined);
   const incidents = new IncidentService(database, (tx, i) => analysis.enqueueInTransaction(tx, i.organizationId, i.incidentId, i.version, i.createdBy));
+  const aiUserLimiter = new SlidingWindowLimiter(options.aiUserLimit ?? 10_000, 600_000);
+  const aiSuggestions = new AiSuggestionService(database, queue, {
+    serverEnabled: options.suggestionProvider !== undefined,
+    dailyLimit: options.aiDailyLimit ?? 20,
+    userLimiter: aiUserLimiter,
+  });
+  const jobHandlers = () => [
+    ...(options.provider ? [new AnalysisJobHandler(database, options.provider)] : []),
+    ...(options.suggestionProvider ? [new SuggestionJobHandler(database, options.suggestionProvider, incidents)] : []),
+  ];
   const newWorker = (workerId: string) =>
-    new JobWorker(database, queue, options.provider ? [new AnalysisJobHandler(database, options.provider)] : [], {
+    new JobWorker(database, queue, jobHandlers(), {
       workerId,
       leaseSeconds: options.workerLeaseSeconds ?? 60,
       pollIntervalMs: 20,
       backoffSeconds: () => 0, // retries are immediately due in tests; backoff itself has its own unit test
     });
-  const worker = options.provider ? newWorker("test-worker") : null;
+  const worker = options.provider || options.suggestionProvider ? newWorker("test-worker") : null;
 
   const register = async (email: string, organizationName = `${email} org`, displayName = email.split("@")[0] as string) => {
     const result = await auth.register({ email, password: PASSWORD, displayName, organizationName }, { ip: "203.0.113.1" });
@@ -121,11 +142,11 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     ...(options.now ? { now: options.now } : {}),
   });
 
-  const handlers = new ApiHandlers(auth, organizations, incidents, analysis, integrations, {
+  const handlers = new ApiHandlers(auth, organizations, incidents, analysis, integrations, aiSuggestions, {
     allowedOrigins: ["http://localhost:3000"],
     secureCookies: false,
     sessionTtlSeconds: options.sessionTtlSeconds ?? 3600,
   });
 
-  return { testDb, database, auth, organizations, incidents, handlers, integrations, ingestion, webhook, webhookLimiters, queue, analysis, worker, newWorker, limiters, register, join, close: () => testDb.drop() };
+  return { testDb, database, auth, organizations, incidents, handlers, integrations, ingestion, webhook, webhookLimiters, queue, analysis, aiSuggestions, aiUserLimiter, worker, newWorker, limiters, register, join, close: () => testDb.drop() };
 }

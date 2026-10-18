@@ -79,7 +79,12 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(logLevels).optional(),
   AI_MODEL: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9._:-]+$/, "must be a model name").optional(),
   AI_TIMEOUT_MS: envInt(1_000, 120_000).optional(),
-  AI_PROVIDER: z.enum(["none", "openai", "gemini"]).optional(),
+  // "fake" is a deterministic, keyless provider for LOCAL use and tests; it is refused when NODE_ENV=production.
+  AI_PROVIDER: z.enum(["none", "openai", "gemini", "fake"]).optional(),
+  // Global switch for grounded AI suggestions (Milestone 9). Default OFF; a provider and a key are also required.
+  AI_ENABLED: z.string().optional(),
+  // Requests per organization per UTC day (atomic in PostgreSQL). Each request is one logical suggestion, retries are free.
+  AI_DAILY_REQUEST_LIMIT: envInt(1, 1000).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
   REALTIME_ENABLED: z.string().optional(),
@@ -90,8 +95,16 @@ export type NodeEnv = "development" | "test" | "production";
 export type LogLevel = (typeof logLevels)[number];
 export type MigrateOnStart = "apply" | "check" | "off";
 
+/** Grounded AI suggestions (Milestone 9). Separate from the older per-incident analysis, which is controlled by AI_PROVIDER alone. */
+export interface AiSuggestionsConfig {
+  /** True only when AI_ENABLED is true AND a usable provider exists. Everything else about the feature is gated on this. */
+  enabled: boolean;
+  disabledReason?: string;
+  dailyRequestLimit: number;
+}
+
 export interface AiConfig {
-  provider: "none" | "openai" | "gemini";
+  provider: "none" | "openai" | "gemini" | "fake";
   /** False means AI features are unavailable; core incident management is unaffected. */
   enabled: boolean;
   disabledReason?: string;
@@ -99,6 +112,7 @@ export interface AiConfig {
   /** Model name sent to the provider. Configurable because model availability changes; not verified against the live API. */
   model: string;
   timeoutMs: number;
+  suggestions: AiSuggestionsConfig;
 }
 
 export interface AppConfig {
@@ -179,25 +193,35 @@ function parseCorsOrigins(raw: string | undefined, nodeEnv: NodeEnv, problems: s
   return [...new Set(origins)];
 }
 
-function resolveAi(env: z.infer<typeof envSchema>): AiConfig {
+function resolveAi(env: z.infer<typeof envSchema>, suggestionsSwitch: boolean): AiConfig {
   const provider = env.AI_PROVIDER ?? "none";
   const model = env.AI_MODEL ?? "gpt-5-mini";
   const timeoutMs = env.AI_TIMEOUT_MS ?? 30_000;
+  const dailyRequestLimit = env.AI_DAILY_REQUEST_LIMIT ?? 20;
+  const off = (reason: string) => ({ enabled: false, disabledReason: reason, dailyRequestLimit });
+  // The switch comes first: with AI_ENABLED unset (the default) suggestions are off whatever else is configured.
+  const gate = (reason: string | null, ready: boolean): AiSuggestionsConfig =>
+    !suggestionsSwitch ? off("AI_ENABLED is not true") : reason ? off(reason) : { enabled: ready, dailyRequestLimit };
+
   if (provider === "none") {
-    return { provider, enabled: false, disabledReason: "AI_PROVIDER is none", model, timeoutMs };
+    return { provider, enabled: false, disabledReason: "AI_PROVIDER is none", model, timeoutMs, suggestions: gate("AI_PROVIDER is none", false) };
+  }
+  if (provider === "fake") {
+    // Keyless and deterministic: suggestions only. The older analysis feature needs a real provider and stays off.
+    return { provider, enabled: false, disabledReason: "AI_PROVIDER is fake (grounded suggestions only)", model, timeoutMs, suggestions: gate(null, true) };
   }
   // A missing key must NOT stop the server: AI is an enhancement, not a dependency of incident tracking.
   const key = provider === "openai" ? env.OPENAI_API_KEY : env.GEMINI_API_KEY;
   if (!key) {
     const name = provider === "openai" ? "OPENAI_API_KEY" : "GEMINI_API_KEY";
-    return { provider, enabled: false, disabledReason: `${name} is not set`, model, timeoutMs };
+    return { provider, enabled: false, disabledReason: `${name} is not set`, model, timeoutMs, suggestions: gate(`${name} is not set`, false) };
   }
   if (provider === "gemini") {
     // Gemini is accepted for an explicit, non-fatal configuration, but no adapter exists yet.
     // Do not report AI as enabled when the provider factory will return null.
-    return { provider, enabled: false, disabledReason: "Gemini provider is not implemented", model, timeoutMs };
+    return { provider, enabled: false, disabledReason: "Gemini provider is not implemented", model, timeoutMs, suggestions: gate("Gemini provider is not implemented", false) };
   }
-  return { provider, enabled: true, apiKey: new Secret(key), model, timeoutMs };
+  return { provider, enabled: true, apiKey: new Secret(key), model, timeoutMs, suggestions: gate(null, true) };
 }
 
 /** Validates the environment and returns typed configuration, or throws ConfigError listing every problem. */
@@ -222,6 +246,13 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     }
   }
 
+  let suggestionsSwitch = false;
+  if (source.AI_ENABLED !== undefined) {
+    const parsed = parseEnvBoolean(source.AI_ENABLED);
+    if (parsed === undefined) problems.push("AI_ENABLED: must be true or false");
+    else suggestionsSwitch = parsed;
+  }
+
   let realtimeEnabled = true;
   if (source.REALTIME_ENABLED !== undefined) {
     const parsed = parseEnvBoolean(source.REALTIME_ENABLED);
@@ -231,6 +262,9 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
 
   const nodeEnv: NodeEnv = result.success ? (result.data.NODE_ENV ?? "development") : "development";
   const corsOrigins = parseCorsOrigins(source.CORS_ORIGINS, nodeEnv, problems);
+  if (nodeEnv === "production" && source.AI_PROVIDER === "fake") {
+    problems.push("AI_PROVIDER: fake is for local use and tests only and is not allowed when NODE_ENV=production");
+  }
 
   if (!result.success || problems.length > 0) throw new ConfigError(problems);
   const env = result.data;
@@ -258,7 +292,7 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     redis: env.REDIS_URL ? { url: new Secret(env.REDIS_URL) } : null,
     migrations: { mode: env.MIGRATE_ON_START ?? "check" },
     logLevel: env.LOG_LEVEL ?? "info",
-    ai: resolveAi(env),
+    ai: resolveAi(env, suggestionsSwitch),
     realtime: { enabled: realtimeEnabled, revalidateSeconds: env.REALTIME_REVALIDATE_SECONDS ?? 10 },
   };
 }
@@ -278,7 +312,14 @@ export function describeConfig(config: AppConfig): Record<string, unknown> {
     redis: config.redis ? { url: redactUrl(config.redis.url.reveal()) } : null,
     migrations: config.migrations,
     logLevel: config.logLevel,
-    ai: { provider: config.ai.provider, enabled: config.ai.enabled, disabledReason: config.ai.disabledReason, model: config.ai.model, timeoutMs: config.ai.timeoutMs },
+    ai: {
+      provider: config.ai.provider,
+      enabled: config.ai.enabled,
+      disabledReason: config.ai.disabledReason,
+      model: config.ai.model,
+      timeoutMs: config.ai.timeoutMs,
+      suggestions: config.ai.suggestions,
+    },
     realtime: config.realtime,
   };
 }

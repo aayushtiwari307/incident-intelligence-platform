@@ -20,6 +20,14 @@ describe("action permissions", () => {
     assert.equal(can("owner", "integration:manage"), true);
   });
 
+  it("AI suggestions: responders use them, only admins and owners switch them on", () => {
+    assert.equal(can("viewer", "aiSuggestion:use"), false);
+    assert.equal(can("responder", "aiSuggestion:use"), true);
+    assert.equal(can("responder", "ai:configure"), false);
+    assert.equal(can("admin", "ai:configure"), true);
+    assert.equal(can("owner", "ai:configure"), true);
+  });
+
   it("no role means no permission", () => {
     assert.equal(can(null, "incident:read"), false);
     assert.equal(can(undefined, "incident:read"), false);

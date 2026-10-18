@@ -11,10 +11,13 @@ import {
   type IncidentSeverity,
   type MemberDto,
 } from "@platform/shared";
+import { AiSuggestionsPanel, type AiDraftRequest } from "../../../components/ai-suggestions-panel";
 import { AnalysisPanel } from "../../../components/analysis-panel";
+import { SimilarIncidentsPanel } from "../../../components/similar-incidents-panel";
 import { AppShell, useCan } from "../../../components/shell";
 import { Field, FormError, LiveStatus, SeverityBadge, StatusBadge } from "../../../components/ui";
 import { ApiError } from "../../../lib/api-client";
+import { ResolveForm } from "../../../components/resolve-form";
 import { SEVERITY_LABEL, TRANSITION_VERB, describeEvent, errorText, relativeTime } from "../../../lib/format";
 import { acceptSnapshot, mergeTimeline } from "../../../lib/realtime-state";
 import { api } from "../../../lib/session";
@@ -41,9 +44,13 @@ function IncidentDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [resolving, setResolving] = useState(false);
   // The version the open edit form was based on. Live updates move `incident.version` forward while the user is typing;
   // saving must still be checked against what they were editing, or it would silently overwrite a colleague's change.
   const [editBaseVersion, setEditBaseVersion] = useState<number | null>(null);
+  // An AI suggestion turned into a DRAFT: it only pre-fills the normal forms. Nothing is saved until a human submits.
+  const [draftSeverity, setDraftSeverity] = useState<IncidentDto["severity"] | null>(null);
+  const [commentDraft, setCommentDraft] = useState<{ body: string; nonce: number } | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -104,6 +111,19 @@ function IncidentDetail() {
   if (!incident) return error ? <FormError message={error} /> : <p role="status">Loading incident…</p>;
 
   const next = INCIDENT_TRANSITIONS[incident.status];
+  const nextWithoutResolve = next.filter((status) => status !== "resolved");
+
+  async function handleResolveSuccess() {
+    await reload();
+    setResolving(false);
+    setNotice("Incident resolved.");
+  }
+
+  async function handleResolveTransitionFailure(failure: unknown) {
+    if (failure instanceof ApiError && (failure.code === "VERSION_CONFLICT" || failure.code === "INVALID_TRANSITION")) {
+      await reload();
+    }
+  }
 
   return (
     <>
@@ -121,6 +141,7 @@ function IncidentDetail() {
             className="btn secondary"
             onClick={() => {
               setEditBaseVersion(editing ? null : incident.version);
+              setDraftSeverity(null);
               setEditing((v) => !v);
             }}
             aria-expanded={editing}
@@ -150,7 +171,14 @@ function IncidentDetail() {
               changes, cancel, and edit again.
             </p>
           ) : null}
+          {draftSeverity ? (
+            <p role="status" className="notice">
+              AI-suggested severity {SEVERITY_LABEL[draftSeverity]} is pre-selected as a draft. Review it and save, or change it.
+            </p>
+          ) : null}
           <EditForm
+            key={draftSeverity ?? "plain"}
+            draftSeverity={draftSeverity}
             incident={incident}
             members={members}
             onSave={async (input) => {
@@ -173,7 +201,7 @@ function IncidentDetail() {
         <section aria-labelledby="status-h">
           <h2 id="status-h">Move to</h2>
           <div className="actions">
-            {next.map((to) => (
+            {nextWithoutResolve.map((to) => (
               <button
                 key={to}
                 type="button"
@@ -183,9 +211,37 @@ function IncidentDetail() {
                 {TRANSITION_VERB[to]}
               </button>
             ))}
+            {next.includes("resolved") && !resolving ? (
+              <button type="button" className="btn secondary" onClick={() => setResolving(true)}>
+                Resolve
+              </button>
+            ) : null}
           </div>
+          {resolving ? (
+            <ResolveForm
+              incidentId={incident.id}
+              expectedVersion={incident.version}
+              onCancel={() => setResolving(false)}
+              onComplete={() => void handleResolveSuccess()}
+              onTransitionFailure={handleResolveTransitionFailure}
+            />
+          ) : null}
         </section>
       ) : null}
+
+      <SimilarIncidentsPanel incidentId={incident.id} />
+
+      <AiSuggestionsPanel
+        incident={incident}
+        onDraft={(draft: AiDraftRequest) => {
+          if (draft.severity && canUpdate) {
+            setEditBaseVersion(incident.version);
+            setDraftSeverity(draft.severity);
+            setEditing(true);
+          }
+          if (draft.commentBody) setCommentDraft({ body: draft.commentBody, nonce: Date.now() });
+        }}
+      />
 
       <AnalysisPanel
         incident={incident}
@@ -207,7 +263,17 @@ function IncidentDetail() {
             </li>
           ))}
         </ol>
-        {canComment ? <CommentForm onSubmit={(body) => mutate(() => api.comment(incident.id, body))} /> : null}
+        {canComment ? (
+          <CommentForm
+            key={commentDraft?.nonce ?? 0}
+            initialBody={commentDraft?.body ?? ""}
+            onSubmit={async (body) => {
+              const ok = await mutate(() => api.comment(incident.id, body));
+              if (ok) setCommentDraft(null);
+              return ok;
+            }}
+          />
+        ) : null}
       </section>
     </>
   );
@@ -216,9 +282,11 @@ function IncidentDetail() {
 function EditForm({
   incident,
   members,
+  draftSeverity = null,
   onSave,
 }: {
   incident: IncidentDto;
+  draftSeverity?: IncidentSeverity | null;
   members: MemberDto[];
   onSave(input: { title: string; description: string; severity: IncidentSeverity; assigneeId: string | null }): Promise<void>;
 }) {
@@ -241,7 +309,7 @@ function EditForm({
         <input id="edit-title" name="title" defaultValue={incident.title} maxLength={200} required />
       </Field>
       <Field label="Severity" htmlFor="edit-severity">
-        <select id="edit-severity" name="severity" defaultValue={incident.severity}>
+        <select id="edit-severity" name="severity" defaultValue={draftSeverity ?? incident.severity}>
           {INCIDENT_SEVERITIES.map((s) => (
             <option key={s} value={s}>
               {SEVERITY_LABEL[s]}
@@ -269,7 +337,7 @@ function EditForm({
   );
 }
 
-function CommentForm({ onSubmit }: { onSubmit(body: string): Promise<boolean> }) {
+function CommentForm({ onSubmit, initialBody = "" }: { onSubmit(body: string): Promise<boolean>; initialBody?: string }) {
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -283,7 +351,7 @@ function CommentForm({ onSubmit }: { onSubmit(body: string): Promise<boolean> })
   return (
     <form onSubmit={submit} aria-label="New comment" className="comment-form">
       <Field label="Add a comment" htmlFor="comment-body">
-        <textarea id="comment-body" name="body" rows={3} maxLength={5000} required />
+        <textarea id="comment-body" name="body" rows={initialBody ? 8 : 3} maxLength={5000} required defaultValue={initialBody} />
       </Field>
       <button type="submit" className="btn" disabled={busy}>
         {busy ? "Posting…" : "Post comment"}

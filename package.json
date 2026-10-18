@@ -16,6 +16,8 @@
     "typecheck": "npm run build -w @platform/shared && npm run typecheck -w @platform/api && npm run typecheck -w @platform/web",
     "lint": "eslint .",
     "test": "node --test \"scripts/*.test.mjs\" && npm run test -w @platform/shared && npm run test -w @platform/api && npm run test -w @platform/web",
+    "eval:m8-search": "node scripts/run-m8-search-evaluation.mjs",
+    "eval:m8-confirmation": "node scripts/run-m8-confirmatory-evaluation.mjs",
     "test:integration": "npm run test:integration -w @platform/api",
     "check:deps": "node scripts/check-dependency-duplicates.mjs",
     "check:hygiene": "node scripts/check-repo-hygiene.mjs",

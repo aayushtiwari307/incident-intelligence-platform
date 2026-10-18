@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { REALTIME_EVENTS } from "@platform/shared";
-import { isIncidentMessage, startRealtime, type RealtimeHandlers, type RealtimeStatus, type SocketLike } from "./realtime-client";
+import {
+  isIncidentMessage,
+  startRealtime,
+  startRestFallback,
+  type RealtimeHandlers,
+  type RealtimeStatus,
+  type SocketLike,
+} from "./realtime-client";
 
 class FakeSocket implements SocketLike {
   private readonly listeners = new Map<string, Array<(payload: unknown) => void>>();
@@ -135,6 +142,27 @@ describe("startRealtime", () => {
     assert.deepEqual(r.syncs, []);
     assert.deepEqual(r.events, []);
     assert.equal(r.lost(), 0);
+  });
+});
+
+describe("startRestFallback", () => {
+  it("reloads immediately and periodically without opening a realtime connection", () => {
+    jest.useFakeTimers();
+    const statuses: RealtimeStatus[] = [];
+    const syncs: string[] = [];
+    const fallback = startRestFallback({
+      onStatus: (status) => statuses.push(status),
+      onSync: (reason) => syncs.push(reason),
+    }, 1000);
+
+    expect(statuses).toEqual(["offline"]);
+    expect(syncs).toEqual(["ready"]);
+    jest.advanceTimersByTime(2000);
+    expect(syncs).toEqual(["ready", "stream_gap", "stream_gap"]);
+    fallback.stop();
+    jest.advanceTimersByTime(1000);
+    expect(syncs).toEqual(["ready", "stream_gap", "stream_gap"]);
+    jest.useRealTimers();
   });
 });
 

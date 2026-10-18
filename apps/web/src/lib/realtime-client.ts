@@ -31,6 +31,16 @@ export interface RealtimeOptions {
   retryDelaysMs?: readonly number[];
 }
 
+export function startRestFallback(
+  handlers: Pick<RealtimeHandlers, "onStatus" | "onSync">,
+  intervalMs = 30_000,
+): { stop(): void } {
+  handlers.onStatus("offline");
+  handlers.onSync("ready");
+  const timer = setInterval(() => handlers.onSync("stream_gap"), intervalMs);
+  return { stop: () => clearInterval(timer) };
+}
+
 export function isIncidentMessage(value: unknown): value is IncidentRealtimeMessage {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;

@@ -154,12 +154,65 @@ describe("HTTP behaviour (real PostgreSQL)", () => {
     assert.equal(list.body.items.length, 1);
   });
 
+  it("creates and updates a resolution through the incident HTTP handlers", async () => {
+    const { cookie } = await signUp("resolution-handler@example.com");
+    const createdIncident = await call(
+      app.handlers.createIncident(req({ method: "POST", cookie, body: { title: "DB down", severity: "sev1" } })),
+    );
+    const incident = createdIncident.body as IncidentDto;
+
+    const absent = await call(app.handlers.getIncidentResolution(req({ cookie, params: { id: incident.id } })));
+    assert.equal(absent.status, 404);
+
+    const created = await call(
+      app.handlers.createIncidentResolution(
+        req({ method: "POST", cookie, params: { id: incident.id }, body: { rootCause: "Pool saturation", fixApplied: "Increased capacity" } }),
+      ),
+    );
+    assert.equal(created.status, 201);
+    assert.equal(created.body.version, 1);
+    assert.equal(created.body.resolvedBy, ((await app.handlers.me(req({ cookie }))).body as MeDto).user.id);
+
+    const read = await call(app.handlers.getIncidentResolution(req({ cookie, params: { id: incident.id } })));
+    assert.equal(read.status, 200);
+    assert.equal(read.body.rootCause, "Pool saturation");
+    assert.equal(read.body.fixApplied, "Increased capacity");
+
+    const updated = await call(
+      app.handlers.updateIncidentResolution(
+        req({
+          method: "PUT",
+          cookie,
+          params: { id: incident.id },
+          body: { expectedVersion: 1, rootCause: "Pool saturation after deploy", fixApplied: "Rolled back deploy" },
+        }),
+      ),
+    );
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.version, 2);
+
+    const forged = await call(
+      app.handlers.updateIncidentResolution(
+        req({ method: "PUT", cookie, params: { id: incident.id }, body: { expectedVersion: 2, rootCause: "x", fixApplied: "y", resolvedBy: "forged" } }),
+      ),
+    );
+    assert.equal(forged.status, 400);
+    assert.equal(forged.body.error.code, "VALIDATION_FAILED");
+  });
+
   it("tenant isolation through the HTTP layer: ids from another organization are 404 and a body organizationId is refused", async () => {
     const a = await signUp("a@example.com");
     const b = await signUp("b@example.com");
     const secret = (await call(app.handlers.createIncident(req({ method: "POST", cookie: a.cookie, body: { title: "secret", severity: "sev2" } })))).body as IncidentDto;
+    const resolution = await call(
+      app.handlers.createIncidentResolution(
+        req({ method: "POST", cookie: a.cookie, params: { id: secret.id }, body: { rootCause: "private cause", fixApplied: "private fix" } }),
+      ),
+    );
+    assert.equal(resolution.status, 201);
     for (const r of [
       await call(app.handlers.getIncident(req({ cookie: b.cookie, params: { id: secret.id } }))),
+      await call(app.handlers.getIncidentResolution(req({ cookie: b.cookie, params: { id: secret.id } }))),
       await call(app.handlers.updateIncident(req({ method: "PATCH", cookie: b.cookie, params: { id: secret.id }, body: { expectedVersion: 1, title: "pwn" } }))),
       await call(app.handlers.incidentTimeline(req({ cookie: b.cookie, params: { id: secret.id } }))),
     ]) {
