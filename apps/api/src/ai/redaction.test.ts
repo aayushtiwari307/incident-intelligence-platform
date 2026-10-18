@@ -8,6 +8,8 @@ const GITHUB_TOKEN = join("gh", "p_", "a".repeat(36));
 const AWS_KEY = join("AKI", "A", "ABCDEFGHIJKLMNOP");
 const JWT = join("eyJ", "hbGciOiJIUzI1NiJ9", ".", "eyJzdWIiOiIxMjM0NTY3ODkwIn0", ".", "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U");
 const PASSWORD = "hunter2-correct-horse";
+const PRIVATE_KEY_BEGIN = join("-----BEGIN ", "PRIVATE", " KEY-----");
+const RSA_PRIVATE_KEY_BEGIN = join("-----BEGIN ", "RSA ", "PRIVATE", " KEY-----");
 
 describe("outbound redaction (best effort)", () => {
   it("removes email addresses", () => {
@@ -70,12 +72,12 @@ describe("outbound redaction (best effort)", () => {
 
   it("removes private-key blocks, including an unterminated one", () => {
     const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nKcwggSjAgEAAoIBAQC7\n";
-    const whole = redactForProvider(`key pasted:\n-----BEGIN PRIVATE KEY-----\n${body}-----END PRIVATE KEY-----\nthanks`);
+    const whole = redactForProvider(`key pasted:\n${PRIVATE_KEY_BEGIN}\n${body}-----END PRIVATE KEY-----\nthanks`);
     assert.ok(!whole.text.includes("MIIEvQ"));
     assert.ok(whole.text.includes("thanks"), "text after a complete block is kept");
     assert.equal(whole.counts.private_key, 1);
 
-    const cut = redactForProvider(`-----BEGIN RSA PRIVATE KEY-----\n${body}`);
+    const cut = redactForProvider(`${RSA_PRIVATE_KEY_BEGIN}\n${body}`);
     assert.ok(!cut.text.includes("MIIEvQ"));
     assert.equal(cut.counts.private_key, 1);
   });
@@ -104,7 +106,7 @@ describe("outbound redaction (best effort)", () => {
   });
 
   it("stays fast on adversarial input", () => {
-    const hostile = ["a".repeat(90_000), "@".repeat(5000), "password=".repeat(5000), "://:".repeat(5000), "-----BEGIN PRIVATE KEY-----".repeat(500)];
+    const hostile = ["a".repeat(90_000), "@".repeat(5000), "password=".repeat(5000), "://:".repeat(5000), PRIVATE_KEY_BEGIN.repeat(500)];
     for (const input of hostile) {
       const started = Date.now();
       redactForProvider(input);
