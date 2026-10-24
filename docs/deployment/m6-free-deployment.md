@@ -1,6 +1,6 @@
 # M6 — Free public demo deployment
 
-**Status:** local deployment configuration only. No provider resources have been created and no live service has been launched.
+**Status (updated 2026-10-24):** deployed on Render Free as one combined Docker web service with Neon PostgreSQL. Live checks returned HTTP 200 for `/`, `/health/live`, and `/health/ready`. The provisioning steps below are retained as reproducible setup instructions; they do not mean deployment is still pending.
 
 ## Architecture
 

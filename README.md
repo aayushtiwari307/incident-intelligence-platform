@@ -1,7 +1,18 @@
-# Incident platform (working title)
+# Incident Intelligence Platform
 
 Incident operations platform: NestJS API, Next.js web app, PostgreSQL, a PostgreSQL-backed durable job queue, and optional AI assistance.
-Early development. Implemented: accounts and organizations, roles, invitations, incident lifecycle with an audit timeline. Also implemented: a durable PostgreSQL job queue and optional AI incident analysis (off by default). The queue does not use BullMQ or Redis, and there is no Redis service (`REDIS_URL` is optional and unused). Implemented (merged in M4) but not yet verified at runtime in a real browser: secure Socket.IO real-time incident updates (ADR 0016). Milestone 5 (ADR 0017, `docs/verification/milestone-5-status.md`) adds WebSocket smoke checks, an optional single-origin proxy and audit records; it is implemented in source and **not accepted**. Milestone 7 (ADR 0018, `docs/integrations/alertmanager.md`, `docs/verification/milestone-7-status.md`) adds a Bearer-authenticated Alertmanager webhook with transactional alert-cycle deduplication; it is implemented in source and **not accepted**. Milestone 9 (ADR 0019, `docs/verification/milestone-9-status.md`) adds grounded AI suggestions: cited, validated, draft-only, opt-in per organization, quota-limited, and off by default; native unit/integration tests, typechecks, lint, builds, and migration checks passed locally. No live AI call or deployment was performed. Not yet implemented: GitHub issue enrichment or a public deployment. See `docs/decisions` (start with 0010) for what exists and what is explicitly not done.
+Current status (2026-10-24): a low-volume public demo is deployed on Render Free with Neon PostgreSQL. The homepage, `/health/live`, and `/health/ready` returned HTTP 200 in live checks. This is a demo deployment, not a production or uptime guarantee. Core accounts, organizations, roles, invitations, incident lifecycle, audit timeline, and the durable PostgreSQL job queue are implemented.
+
+## Milestone status
+
+- **M1–M4 — Core platform:** Implemented. Live incident creation, status transitions, and timeline updates were manually verified on 2026-10-24.
+- **M5 — Real-time updates:** Implemented in source but disabled in the current deployment. Two-browser live verification remains pending. See `docs/verification/milestone-5-status.md`.
+- **M6 — Free deployment:** Render and Neon deployment is working; live health checks passed. Backup/restore drill and the public registration policy decision remain pending. See `docs/deployment/m6-free-deployment.md`.
+- **M7 — Alert intake and deduplication:** Merged and included in the deployed application. The verification record documents candidate integration tests and synthetic simulator checks. A real external Alertmanager deployment remains untested, and rate limiting is in-memory per process. See `docs/verification/milestone-7-status.md`.
+- **M8 — Similar incidents:** Implemented without requiring AI. See the M8 verification and evaluation documents for recorded evidence and limitations.
+- **M9 — Grounded AI suggestions:** The local verification record reports 445 unit tests and 257 PostgreSQL integration tests passing, along with typecheck, lint, builds, and migration checks. No live AI-provider request has been verified; AI remains disabled in the deployed service. See `docs/verification/milestone-9-status.md`.
+
+**Still not implemented:** GitHub issue enrichment. Real-time and live AI verification remain outstanding.
 
 ## Requirements
 Node >= 22.12 (see `.nvmrc`), Docker, npm 10+.

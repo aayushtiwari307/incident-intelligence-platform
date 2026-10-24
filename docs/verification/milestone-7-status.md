@@ -1,6 +1,6 @@
 # Milestone 7 verification status: Alert intake and deduplication
 
-**Status: verified implementation under review in PR #2; not merged or deployed.** Updated 2026-10-17.
+**Status correction (2026-10-17): M7 is merged to `main` in `3c6231502dd736f266f7defd7aba1f32a455869c`, the merge commit for PR #2. It was subsequently included in the combined Render deployment verified on 2026-10-24. This does not prove that a real external Alertmanager integration has been tested.** The status and verification notes below describe the pre-merge candidate review and are retained as historical evidence.
 
 ## Final verification evidence
 
@@ -18,4 +18,4 @@ The earlier authoring/sandbox attempts were incomplete: registry access and Dock
 
 - Rate limiting is currently in-memory and per process; it is not shared across API instances.
 - A real external Alertmanager deployment was not tested; the live verification used the synthetic simulator against the candidate API.
-- M7 is under review in PR #2. It has not been merged or deployed.
+- At the time this verification note was written, M7 was under review in PR #2 and had not been merged or deployed. The later Render deployment was verified on 2026-10-24; external Alertmanager integration remains untested.
