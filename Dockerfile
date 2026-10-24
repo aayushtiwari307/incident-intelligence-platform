@@ -15,6 +15,8 @@ RUN NEXT_PUBLIC_API_URL="" NEXT_PUBLIC_REALTIME_ENABLED=false npm run build -w @
 RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM caddy:2.8.4-alpine AS caddy
+# This app binds only to ports >= 1024 and does not need the privileged-port capability.
+RUN setcap -r /usr/bin/caddy
 
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
