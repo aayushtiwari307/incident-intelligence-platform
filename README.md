@@ -26,9 +26,10 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 
 ## 📌 Status at a glance
 
-> **Code-complete through Milestone 10** (as of 2026-10-25). The public demo runs the M1–M9 build on Render Free + Neon.
-> GitHub enrichment and M10 service/change context are merged to `main` but **not yet deployed**, and a full test run on the
-> final tree has **not yet been recorded**. The [evidence table](#-what-is-verified-and-what-is-not) below says exactly what is proven.
+> **Code-complete through Milestone 10 and fully verified locally** (2026-10-25, commit `d89f800`): CI green, 537 unit tests,
+> 271 real-PostgreSQL integration tests, a 20/20 container smoke test and a clean dependency audit. The public demo still runs the
+> M1–M9 build on Render Free + Neon; GitHub enrichment and M10 service/change context are merged but **not yet deployed**.
+> The [evidence table](#-what-is-verified-and-what-is-not) below says exactly what is proven and what is not.
 
 ---
 
@@ -133,7 +134,11 @@ npm run typecheck && npm run lint
 npm test                    # unit tests (scripts, shared, API, web)
 npm run test:integration    # real PostgreSQL, loopback only
 npm run build
+npm run smoke:stack         # against the running container stack
 ```
+
+> `smoke:stack` also checks real-time, which is **off by default**. For a local run, set `REALTIME_ENABLED=true` in your `.env`
+> and recreate the API container first, otherwise its real-time checks fail by design.
 
 Integration tests **fail closed** unless the database host is loopback, so they cannot touch a hosted database. CI also builds
 the full container stack, smoke-tests HTTP and WebSocket behaviour (including a negative control that must fail when real-time is
@@ -147,14 +152,15 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 
 | Area | Evidence | Status |
 |---|---|---|
-| Core platform M1–M9 | Windows run on 2026-10-24: typecheck, lint, **445 unit tests**, **257 real-PostgreSQL integration tests**, API and web builds all passed | ✅ Verified locally |
-| Demo deployment | Render Free + Neon, `/`, `/health/live`, `/health/ready` returned HTTP 200 on 2026-10-24 (M1–M9 build) | ✅ Live checks passed |
-| Continuous integration | CI #18 green on `3fdfb63`. Later commits are CI fixes and the PR #7 merge | 🟡 Re-confirm the latest run on `main` |
-| Dependency audit | Pre-merge baseline: clean `npm ci`, `npm audit` reported 0 vulnerabilities | 🟡 Re-run on the final tree |
-| GitHub enrichment (0013) | Code, mocked-network unit tests, one real-PostgreSQL tenant-boundary test | 🟡 Implemented, no full-tree run recorded, **no live GitHub call** |
-| Service and change context (0014) | Code plus a real-PostgreSQL integration suite (5 tests) | 🟡 Implemented, no full-tree run recorded |
+| Whole platform M1–M10 | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build | ✅ Verified locally |
+| Container stack | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout | ✅ Verified locally |
+| Demo deployment | Render Free + Neon, `/`, `/health/live`, `/health/ready` returned HTTP 200 on 2026-10-24 (M1–M9 build) | 🟡 Live, but migrations `0013`/`0014` are not yet applied there |
+| Continuous integration | Latest run on `main` is green, including the PR #7 merge | ✅ Passing |
+| Dependency audit | `npm audit` reported **0 vulnerabilities** on the final tree (547 packages) | ✅ Clean on 2026-10-25 |
+| GitHub enrichment (0013) | Mocked-network unit tests plus a real-PostgreSQL tenant-boundary test, all passing | 🟡 Tested locally, **no live GitHub call yet** |
+| Service and change context (0014) | Real-PostgreSQL integration suite passing within the 271 tests | ✅ Verified locally, not yet deployed |
 | Registration policy | Invite-only default in production, covered by code and tests | 🟡 Not yet checked on the live Render service |
-| Real-time | Server and client code with integration tests | ⬜ Off on the demo; **two-browser acceptance not done** |
+| Real-time | Integration tests plus the container smoke test (auth, delivery, tenant isolation, logout) | 🟡 Verified locally; off on the demo, **two-browser acceptance on the live URL not done** |
 | Alertmanager intake | Integration tests and a local simulator | ⬜ Never tested against a real Alertmanager |
 | Grounded AI | Tested with fake providers and an OpenAI adapter's unit tests | ⬜ **No live provider call has ever been made**; AI is off on the demo |
 | Backup / restore | Guarded scripts with unit tests | ⬜ Drill not yet performed |
@@ -221,7 +227,7 @@ is more hands-off than the manual linking here.
 - [x] GitHub issue enrichment
 - [x] M10: service catalog and change context
 - [ ] Apply migrations `0013`/`0014` to the hosted database and redeploy
-- [ ] Full-tree verification on `main` and refreshed evidence numbers
+- [x] Full-tree verification on `main` (2026-10-25)
 - [ ] Two-browser real-time acceptance on the deployed URL
 - [ ] Backup / restore drill, live GitHub test, real Alertmanager test
 - [ ] Decide whether the demo gets a free AI provider or stays AI-free
