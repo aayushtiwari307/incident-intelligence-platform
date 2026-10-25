@@ -38,6 +38,8 @@ services:
       REDIS_URL: ${REDIS_URL:-}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
       REALTIME_ENABLED: ${REALTIME_ENABLED:-false}
+      # Real-time needs its own direct (non-pooled) PostgreSQL connection; this stack's postgres container is one.
+      REALTIME_DATABASE_URL: postgresql://${POSTGRES_USER:-platform}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-platform}
       # This local stack runs with NODE_ENV=production but is a throw-away test bed: the CI smoke test registers users
       # through the public endpoint. The deployed demo does not set this, so it keeps the production default (refused).
       PUBLIC_REGISTRATION_ENABLED: ${PUBLIC_REGISTRATION_ENABLED:-true}
