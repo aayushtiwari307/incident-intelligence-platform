@@ -43,7 +43,12 @@ jobs:
       - run: npm run test:integration
       - run: npm run build
       - name: Prepare local-only Compose configuration
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          # The shipped default keeps real-time off (hosted demo). This throw-away CI stack turns it on
+          # so the smoke test can verify real-time.
+          sed -i '/^REALTIME_ENABLED=/d' .env
+          printf '\nREALTIME_ENABLED=true\n' >> .env
       - name: Validate Compose files (default, app, and single-origin edge topology)
         run: |
           docker compose config --quiet
@@ -78,10 +83,14 @@ jobs:
           npm run smoke:stack
       - name: Container logs (only when something failed)
         if: failure()
-        run: docker compose --profile app logs --no-color --tail=200
+        run: |
+          [ -f .env ] || cp .env.example .env
+          docker compose --profile app logs --no-color --tail=200
       - name: Stop the direct stack without deleting volumes
         if: always()
-        run: docker compose --profile app down --remove-orphans
+        run: |
+          [ -f .env ] || cp .env.example .env
+          docker compose --profile app down --remove-orphans
 
       # ---- Topology 2: ONE origin behind a reverse proxy (Caddy). Only the proxy publishes a port. ----
       - name: Build and start the single-origin stack behind the proxy
@@ -99,7 +108,11 @@ jobs:
         run: npm run smoke:stack
       - name: Container logs (only when something failed)
         if: failure()
-        run: docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app logs --no-color --tail=200
+        run: |
+          [ -f .env ] || cp .env.example .env
+          docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app logs --no-color --tail=200
       - name: Stop the proxy stack without deleting volumes
         if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app down --remove-orphans
+        run: |
+          [ -f .env ] || cp .env.example .env
+          docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app down --remove-orphans

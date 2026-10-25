@@ -46,6 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <strong className="brand">Incident platform</strong>
         <nav aria-label="Main">
           {link("/incidents", "Incidents")}
+          {link("/services", "Services")}
+          {link("/github", "GitHub") }
           {link("/team", "Team")}
         </nav>
         <div className="topbar-right">

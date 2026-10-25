@@ -17,6 +17,12 @@ import type {
   MeDto,
   MemberDto,
   OrgRole,
+  IntegrationKind,
+  ServiceDto,
+  IncidentServiceContextDto,
+  GithubSettingsDto,
+  GithubRepositoryDto,
+  GithubIssueContextDto,
 } from "@platform/shared";
 
 /** An error response from the API (or a network failure, status 0). `code` is the stable machine-readable value. */
@@ -69,6 +75,7 @@ export interface IncidentFilters {
 }
 
 export interface ApiClient {
+  registrationPolicy(): Promise<{ publicRegistration: boolean }>;
   register(input: { email: string; password: string; displayName: string; organizationName: string }): Promise<MeDto>;
   registerWithInvite(input: { email: string; password: string; displayName: string; inviteToken: string }): Promise<MeDto>;
   login(input: { email: string; password: string }): Promise<MeDto>;
@@ -84,7 +91,7 @@ export interface ApiClient {
   acceptInvite(token: string): Promise<MeDto>;
   listIntegrations(): Promise<IntegrationDto[]>;
   /** The returned token is shown once and cannot be retrieved again. */
-  createIntegration(name: string): Promise<CreatedIntegrationDto>;
+  createIntegration(name: string, kind?: IntegrationKind): Promise<CreatedIntegrationDto>;
   /** Replaces the secret; the returned token is shown once and the old one stops working immediately. */
   rotateIntegration(id: string): Promise<CreatedIntegrationDto>;
   revokeIntegration(id: string): Promise<IntegrationDto>;
@@ -109,6 +116,19 @@ export interface ApiClient {
   dismissAiSuggestion(id: string, suggestionId: string): Promise<AiSuggestionDto>;
   aiSettings(): Promise<AiSettingsDto>;
   updateAiSettings(suggestionsEnabled: boolean): Promise<AiSettingsDto>;
+  listServices(): Promise<ServiceDto[]>;
+  createService(input: { name: string; ownerTeam: string; tier: ServiceDto["tier"] }): Promise<ServiceDto>;
+  updateService(id: string, input: Partial<{ name: string; ownerTeam: string; tier: ServiceDto["tier"] }>): Promise<ServiceDto>;
+  removeService(id: string): Promise<void>;
+  linkIncidentService(incidentId: string, serviceId: string | null): Promise<ServiceDto | null>;
+  incidentServiceContext(incidentId: string): Promise<IncidentServiceContextDto>;
+  githubSettings(): Promise<GithubSettingsDto>;
+  updateGithubSettings(enabled: boolean): Promise<GithubSettingsDto>;
+  addGithubRepository(owner: string, repo: string): Promise<GithubRepositoryDto>;
+  removeGithubRepository(id: string): Promise<void>;
+  githubIssueContext(incidentId: string): Promise<GithubIssueContextDto>;
+  linkGithubIssue(incidentId: string, repositoryId: string, issueNumber: number): Promise<GithubIssueContextDto>;
+  unlinkGithubIssue(incidentId: string): Promise<void>;
 }
 
 /**
@@ -149,6 +169,7 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = (i, init
 
   const enc = encodeURIComponent;
   return {
+    registrationPolicy: () => request("GET", "/api/auth/registration-policy"),
     register: (input) => request("POST", "/api/auth/register", input),
     registerWithInvite: (input) => request("POST", "/api/auth/register-with-invite", input),
     login: (input) => request("POST", "/api/auth/login", input),
@@ -163,7 +184,7 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = (i, init
     revokeInvite: (id) => request("DELETE", `/api/organization/invites/${enc(id)}`),
     acceptInvite: (token) => request("POST", "/api/organization/invites/accept", { token }),
     listIntegrations: async () => (await request<{ items: IntegrationDto[] }>("GET", "/api/organization/integrations")).items,
-    createIntegration: (name) => request("POST", "/api/organization/integrations", { name }),
+    createIntegration: (name, kind = "alertmanager") => request("POST", "/api/organization/integrations", { name, kind }),
     rotateIntegration: (id) => request("POST", `/api/organization/integrations/${enc(id)}/rotate`, {}),
     revokeIntegration: (id) => request("DELETE", `/api/organization/integrations/${enc(id)}`),
     listIncidents: (f = {}) =>
@@ -185,5 +206,18 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = (i, init
     aiSettings: () => request("GET", "/api/organization/ai-settings"),
     updateAiSettings: (suggestionsEnabled) => request("PUT", "/api/organization/ai-settings", { suggestionsEnabled }),
     timeline: async (id) => (await request<{ items: IncidentEventDto[] }>("GET", `/api/incidents/${enc(id)}/timeline`)).items,
+    listServices: async () => (await request<{ items: ServiceDto[] }>("GET", "/api/organization/services")).items,
+    createService: (input) => request("POST", "/api/organization/services", input),
+    updateService: (id, input) => request("PATCH", `/api/organization/services/${enc(id)}`, input),
+    removeService: (id) => request("DELETE", `/api/organization/services/${enc(id)}`),
+    linkIncidentService: async (incidentId, serviceId) => (await request<{ service: ServiceDto | null }>("PUT", `/api/incidents/${enc(incidentId)}/service`, { serviceId })).service,
+    incidentServiceContext: (incidentId) => request("GET", `/api/incidents/${enc(incidentId)}/service-context`),
+    githubSettings: () => request("GET", "/api/organization/github"),
+    updateGithubSettings: (enabled) => request("PUT", "/api/organization/github", { enabled }),
+    addGithubRepository: (owner, repo) => request("POST", "/api/organization/github/repositories", { owner, repo }),
+    removeGithubRepository: (id) => request("DELETE", `/api/organization/github/repositories/${enc(id)}`),
+    githubIssueContext: (incidentId) => request("GET", `/api/incidents/${enc(incidentId)}/github-issue`),
+    linkGithubIssue: (incidentId, repositoryId, issueNumber) => request("POST", `/api/incidents/${enc(incidentId)}/github-issue`, { repositoryId, issueNumber }),
+    unlinkGithubIssue: (incidentId) => request("DELETE", `/api/incidents/${enc(incidentId)}/github-issue`),
   };
 }

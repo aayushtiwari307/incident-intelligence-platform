@@ -24,7 +24,7 @@ export function canTransition(from: IncidentStatus, to: IncidentStatus): boolean
   return INCIDENT_TRANSITIONS[from].includes(to);
 }
 
-export const INCIDENT_EVENT_TYPES = ["created", "status_changed", "assigned", "severity_changed", "edited", "comment", "resolution_changed"] as const;
+export const INCIDENT_EVENT_TYPES = ["created", "status_changed", "assigned", "severity_changed", "edited", "comment", "resolution_changed", "change_context"] as const;
 export type IncidentEventType = (typeof INCIDENT_EVENT_TYPES)[number];
 
 // ---------------------------------------------------------------------------------------------

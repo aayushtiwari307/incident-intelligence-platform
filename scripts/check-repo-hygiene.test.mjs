@@ -1,11 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   envVariableNames,
   findCredentialPatterns,
   findSecretyFrontendVars,
   findTrackedArchives,
   findTrackedEnvFiles,
+  sourceTreeFiles,
 } from "./check-repo-hygiene.mjs";
 
 describe("findTrackedEnvFiles", () => {
@@ -52,5 +56,24 @@ describe("findCredentialPatterns", () => {
   it("does not flag ordinary text or short placeholders", () => {
     assert.deepEqual(findCredentialPatterns("OPENAI_API_KEY=sk-replace-me\nPOSTGRES_PASSWORD=dev_only_change_me"), []);
     assert.deepEqual(findCredentialPatterns("const skate = 'sk-8'; ghp is not a token"), []);
+  });
+});
+
+
+describe("sourceTreeFiles ZIP fallback", () => {
+  it("scans ordinary source files but skips generated directories and symlink entries", () => {
+    const root = mkdtempSync(join(tmpdir(), "iip-hygiene-"));
+    try {
+      mkdirSync(join(root, "apps", "api"), { recursive: true });
+      mkdirSync(join(root, "node_modules", "bad-dep"), { recursive: true });
+      mkdirSync(join(root, ".git", "objects"), { recursive: true });
+      writeFileSync(join(root, "README.md"), "safe");
+      writeFileSync(join(root, "apps", "api", ".env"), "SECRET=value");
+      writeFileSync(join(root, "node_modules", "bad-dep", "index.js"), "sk-" + "a".repeat(30));
+      writeFileSync(join(root, ".git", "objects", "ignored"), "ignored");
+      assert.deepEqual(sourceTreeFiles(root), ["README.md", "apps/api/.env"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

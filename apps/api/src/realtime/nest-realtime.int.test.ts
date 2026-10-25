@@ -50,6 +50,8 @@ describe("real-time updates (Nest + PostgreSQL LISTEN/NOTIFY + Socket.IO)", () =
       API_HOST: "127.0.0.1",
       API_PORT: "3001",
       DATABASE_URL: testDb.connectionString,
+      REALTIME_DATABASE_URL: testDb.connectionString,
+      REALTIME_ENABLED: "true",
       REDIS_URL: "redis://127.0.0.1:6380",
       CORS_ORIGINS: ORIGIN,
       TRUST_PROXY_HOPS: "0",

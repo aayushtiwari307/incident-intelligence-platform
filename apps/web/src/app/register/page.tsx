@@ -17,6 +17,8 @@ export default function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteChecked, setInviteChecked] = useState(false);
+  // Asked of the API (the single source of truth) instead of guessed from the build mode. `null` until answered.
+  const [publicRegistration, setPublicRegistration] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Invitation credentials live in the URL fragment, which browsers do not send in HTTP requests or referrers.
@@ -31,7 +33,25 @@ export default function RegisterPage() {
     setInviteChecked(true);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.registrationPolicy().then(
+      (policy) => {
+        if (!cancelled) setPublicRegistration(policy.publicRegistration);
+      },
+      () => {
+        // The policy is only a UI hint. If it cannot be read, show the form: the server still enforces the policy, and a
+        // refusal is turned into the invitation-only message below.
+        if (!cancelled) setPublicRegistration(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const inviteRegistration = Boolean(inviteToken);
+  const policyChecked = publicRegistration !== null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,12 +79,38 @@ export default function RegisterPage() {
       setMe(verified.me);
       router.replace("/incidents");
     } catch (e) {
-      if (e instanceof ApiError && Object.keys(e.fieldErrors).length > 0) setFields(e.fieldErrors);
+      if (e instanceof ApiError && e.status === 403 && e.code === "FORBIDDEN" && !inviteRegistration) {
+        // The server refused public sign-up (the policy request may have failed earlier): show the same message as the policy does.
+        setPublicRegistration(false);
+      } else if (e instanceof ApiError && Object.keys(e.fieldErrors).length > 0) setFields(e.fieldErrors);
       else setError(errorText(e));
       setBusy(false);
     }
   }
 
+  // Wait for both answers so a form is never shown and then replaced by the invitation-only message.
+  if (!inviteChecked || (!inviteRegistration && !policyChecked)) {
+    return (
+      <main className="auth-card">
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      </main>
+    );
+  }
+  if (!inviteRegistration && publicRegistration === false) {
+    return (
+      <main className="auth-card">
+        <h1>Registration is by invitation only</h1>
+        <p className="muted">
+          The public demo accepts new accounts only through a valid organization invitation. Ask an existing organization owner to invite your email address.
+        </p>
+        <p>
+          Already registered? <Link href="/login">Sign in</Link>
+        </p>
+      </main>
+    );
+  }
   return (
     <main className="auth-card">
       <h1>{inviteRegistration ? "Join your teammate’s organization" : "Create your organization"}</h1>
@@ -89,7 +135,7 @@ export default function RegisterPage() {
         <Field label="Password (12+ characters)" htmlFor="password" error={fields.password}>
           <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required />
         </Field>
-        <button type="submit" className="btn" disabled={busy || !inviteChecked}>
+        <button type="submit" className="btn" disabled={busy}>
           {busy ? "Creating…" : inviteRegistration ? "Join organization" : "Create account"}
         </button>
       </form>

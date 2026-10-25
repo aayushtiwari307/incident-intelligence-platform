@@ -83,6 +83,8 @@ export function describeEvent(event: IncidentEventDto): string {
       return "commented";
     case "resolution_changed":
       return `${p.operation === "created" ? "added" : "updated"} resolution details (version ${String(p.version ?? "unknown")})`;
+    case "change_context":
+      return `received change-event correlation ${String(p.changeEventId ?? "")}`;
   }
 }
 

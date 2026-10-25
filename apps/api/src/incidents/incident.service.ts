@@ -156,6 +156,7 @@ export interface AlertIncidentInput {
   title: string;
   description: string;
   severity: IncidentDto["severity"];
+  serviceName?: string | null;
   actor: Actor;
   /** Extra, already-bounded keys for the "created" timeline entry (e.g. source, fingerprint). */
   eventPayload: Record<string, unknown>;
@@ -189,6 +190,7 @@ export class IncidentService {
           severity: input.severity,
           assigneeId: input.assigneeId ?? null,
           createdBy: auth.userId,
+          serviceId: null,
         });
         await this.addEvent(tx, organizationId, incidentId, "created", auth, {
           number,
@@ -568,6 +570,18 @@ export class IncidentService {
    * entry is attributed to the integration. AI analysis is not queued for these incidents; a responder can request it.
    */
   async createFromAlert(tx: SqlClient, input: AlertIncidentInput): Promise<{ id: string; number: number }> {
+    // Resolve and lock the optional service before inserting the incident. Updating service_id afterwards would fire
+    // incidents_before_update and incorrectly bump the brand-new incident's version from 1 to 2. FOR KEY SHARE also
+    // serializes this link with service deletion: if deletion wins first, the alert still creates an unlinked incident.
+    let serviceId: string | null = null;
+    const serviceName = input.serviceName?.trim();
+    if (serviceName) {
+      const service = await tx.query<{ id: string }>(
+        "SELECT id FROM services WHERE organization_id = $1 AND lower(name) = lower($2) FOR KEY SHARE",
+        [input.organizationId, serviceName],
+      );
+      serviceId = service.rows[0]?.id ?? null;
+    }
     const { id, number } = await this.insertIncident(tx, {
       organizationId: input.organizationId,
       title: input.title,
@@ -575,6 +589,7 @@ export class IncidentService {
       severity: input.severity,
       assigneeId: null,
       createdBy: null,
+      serviceId,
     });
     await this.addEvent(tx, input.organizationId, id, "created", input.actor, {
       number,
@@ -649,7 +664,7 @@ export class IncidentService {
   /** Atomic per-organization counter + insert. Concurrent creations serialise on the counter row and get distinct numbers. */
   private async insertIncident(
     tx: SqlClient,
-    i: { organizationId: string; title: string; description: string; severity: IncidentDto["severity"]; assigneeId: string | null; createdBy: string | null },
+    i: { organizationId: string; title: string; description: string; severity: IncidentDto["severity"]; assigneeId: string | null; createdBy: string | null; serviceId: string | null },
   ): Promise<{ id: string; number: number }> {
     const counter = await tx.query<{ last_number: string | number }>(
       `INSERT INTO incident_counters (organization_id, last_number) VALUES ($1, 1)
@@ -659,9 +674,9 @@ export class IncidentService {
     );
     const number = num((counter.rows[0] as { last_number: string | number }).last_number);
     const inserted = await tx.query<{ id: string }>(
-      `INSERT INTO incidents (organization_id, number, title, description, severity, assignee_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [i.organizationId, number, i.title, i.description, i.severity, i.assigneeId, i.createdBy],
+      `INSERT INTO incidents (organization_id, number, title, description, severity, assignee_id, created_by, service_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [i.organizationId, number, i.title, i.description, i.severity, i.assigneeId, i.createdBy, i.serviceId],
     );
     return { id: (inserted.rows[0] as { id: string }).id, number };
   }

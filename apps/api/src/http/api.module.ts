@@ -22,9 +22,13 @@ import { JOB_WORKER, WorkerLifecycle } from "../jobs/worker.lifecycle";
 import { createLogger } from "../common/logger";
 import { OrganizationService } from "../organizations/organization.service";
 import { ApiHandlers } from "./api-handlers";
-import { AiSettingsController, AuthController, IncidentController, IntegrationController, IntegrationWebhookController, OrganizationController, WEBHOOK_BODY_LIMIT } from "./api.controllers";
+import { AiSettingsController, AuthController, IncidentController, IntegrationController, IntegrationWebhookController, OrganizationController, WEBHOOK_BODY_LIMIT, GithubSettingsController, IncidentGithubController, ServicesController, IncidentServiceContextController } from "./api.controllers";
 import { SlidingWindowLimiter } from "./rate-limiter";
 import { RealtimeHub } from "../realtime/hub";
+import { GithubIssueService } from "../github/github-issue.service";
+import { ServiceCatalogService } from "../services/service-catalog.service";
+import { ChangeWebhookHandlers } from "../services/change-webhook-handlers";
+import { SessionContext } from "./session-context";
 import { REALTIME_LISTEN_CONNECTOR, RealtimeService, defaultListenConnector } from "../realtime/realtime.service";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -52,7 +56,7 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
  * instance, per-instance (so effectively looser) when scaled out. Moving them to Redis is the planned fix (ADR 0010).
  */
 @Module({
-  controllers: [AuthController, OrganizationController, IncidentController, AiSettingsController, IntegrationController, IntegrationWebhookController],
+  controllers: [AuthController, OrganizationController, IncidentController, AiSettingsController, IntegrationController, IntegrationWebhookController, GithubSettingsController, IncidentGithubController, ServicesController, IncidentServiceContextController],
   providers: [
     { provide: OPENAI_FETCH, useValue: fetch },
     {
@@ -107,6 +111,10 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
         new IncidentService(db.database, (tx, i) => analysis.enqueueInTransaction(tx, i.organizationId, i.incidentId, i.version, i.createdBy)),
     },
     { provide: IntegrationService, inject: [DatabaseService], useFactory: (db: DatabaseService) => new IntegrationService(db.database) },
+    { provide: GithubIssueService, inject: [DatabaseService], useFactory: (db: DatabaseService) => new GithubIssueService(db.database) },
+    { provide: ServiceCatalogService, inject: [DatabaseService], useFactory: (db: DatabaseService) => new ServiceCatalogService(db.database) },
+    SessionContext,
+    { provide: ChangeWebhookHandlers, inject: [ServiceCatalogService], useFactory: (services: ServiceCatalogService) => new ChangeWebhookHandlers(services) },
     {
       provide: AlertIngestionService,
       inject: [DatabaseService, IncidentService],
@@ -174,6 +182,8 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
           allowedOrigins: config.http.corsOrigins,
           secureCookies: config.nodeEnv === "production",
           sessionTtlSeconds: config.auth.sessionTtlSeconds,
+          // Public organization creation is disabled on the deployed production demo.
+          publicRegistrationEnabled: config.auth.publicRegistrationEnabled,
           onAccessChanged: () => hub.requestRevalidation(),
         }),
     },

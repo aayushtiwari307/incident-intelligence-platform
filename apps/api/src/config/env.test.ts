@@ -42,6 +42,19 @@ describe("parseEnvBoolean (regression: reference used z.coerce.boolean)", () => 
   });
 });
 
+describe("PUBLIC_REGISTRATION_ENABLED", () => {
+  it("allows public registration outside production and denies it by default in production", () => {
+    assert.equal(loadConfig(base()).auth.publicRegistrationEnabled, true);
+    assert.equal(loadConfig(base({ NODE_ENV: "production" })).auth.publicRegistrationEnabled, false);
+  });
+
+  it("supports explicit overrides and rejects ambiguous values", () => {
+    assert.equal(loadConfig(base({ NODE_ENV: "production", PUBLIC_REGISTRATION_ENABLED: "true" })).auth.publicRegistrationEnabled, true);
+    assert.equal(loadConfig(base({ NODE_ENV: "development", PUBLIC_REGISTRATION_ENABLED: "false" })).auth.publicRegistrationEnabled, false);
+    assert.ok(problemsOf(base({ PUBLIC_REGISTRATION_ENABLED: "maybe" })).some((p) => p.startsWith("PUBLIC_REGISTRATION_ENABLED:")));
+  });
+});
+
 describe("loadConfig defaults", () => {
   it("applies safe defaults from a minimal environment", () => {
     const config = loadConfig(base());
@@ -54,6 +67,8 @@ describe("loadConfig defaults", () => {
     assert.equal(config.migrations.mode, "check");
     assert.equal(config.logLevel, "info");
     assert.equal(config.database.poolMax, 10);
+    assert.equal(config.realtime.enabled, false, "real-time is disabled unless explicitly enabled");
+    assert.equal(config.database.realtimeUrl, undefined, "ordinary DATABASE_URL is not reused for LISTEN");
   });
 
   it("webhook body limit defaults to 1 MiB, is separate from the browser limit, and is validated", () => {
@@ -110,6 +125,27 @@ describe("loadConfig validation", () => {
     for (const url of ["http://h", "redis://", "nope"]) {
       assert.ok(problemsOf(base({ REDIS_URL: url })).some((p) => p.startsWith("REDIS_URL:")), url);
     }
+  });
+
+  it("validates and safely selects a dedicated real-time listener URL", () => {
+    const directUrl = `postgresql://platform:${DB_PASSWORD}@ep-direct.neon.tech/platform?sslmode=require`;
+    const config = loadConfig(base({ REALTIME_ENABLED: "true", REALTIME_DATABASE_URL: directUrl }));
+    assert.equal(config.realtime.enabled, true);
+    assert.equal(config.database.realtimeUrl?.reveal(), directUrl);
+    assert.ok(problemsOf(base({ REALTIME_ENABLED: "true" })).some((problem) => problem.startsWith("REALTIME_DATABASE_URL:")));
+    assert.ok(
+      problemsOf(base({ REALTIME_ENABLED: "true", REALTIME_DATABASE_URL: `postgresql://platform:${DB_PASSWORD}@ep-direct-pooler.neon.tech/platform?sslmode=require` }))
+        .some((problem) => problem.includes("direct PostgreSQL endpoint")),
+    );
+    assert.equal(loadConfig(base({ REALTIME_ENABLED: "false" })).realtime.enabled, false);
+
+    const summary = JSON.stringify(describeConfig(config));
+    assert.ok(summary.includes("ep-direct.neon.tech"));
+    assert.ok(!summary.includes(DB_PASSWORD));
+    assert.ok(
+      problemsOf(base({ REALTIME_DATABASE_URL: "https://not-postgres.invalid/db" }))
+        .some((problem) => problem.startsWith("REALTIME_DATABASE_URL:")),
+    );
   });
 
   it("never echoes secret values in error messages", () => {
@@ -295,10 +331,10 @@ describe("REDIS_URL is optional (no code connects to Redis)", () => {
 });
 
 describe("real-time configuration", () => {
-  it("is on by default and re-checks connections every 10 seconds", () => {
+  it("is off by default and re-checks connections every 10 seconds", () => {
     const config = loadConfig(base());
-    assert.deepEqual(config.realtime, { enabled: true, revalidateSeconds: 10 });
-    assert.deepEqual(describeConfig(config).realtime, { enabled: true, revalidateSeconds: 10 });
+    assert.deepEqual(config.realtime, { enabled: false, revalidateSeconds: 10 });
+    assert.deepEqual(describeConfig(config).realtime, { enabled: false, revalidateSeconds: 10 });
   });
 
   it("can be switched off and tuned", () => {

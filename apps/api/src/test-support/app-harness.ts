@@ -72,6 +72,8 @@ export interface TestAppOptions {
   webhookLimits?: { ip?: number; failedAuth?: number; integration?: number };
   /** Clock for startsAt range validation (default: real time). */
   now?: () => Date;
+  /** Override the HTTP public-registration policy in tests. */
+  publicRegistrationEnabled?: boolean;
 }
 
 /** A complete service stack on a fresh real PostgreSQL database with all migrations applied. */
@@ -146,6 +148,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     allowedOrigins: ["http://localhost:3000"],
     secureCookies: false,
     sessionTtlSeconds: options.sessionTtlSeconds ?? 3600,
+    publicRegistrationEnabled: options.publicRegistrationEnabled ?? true,
   });
 
   return { testDb, database, auth, organizations, incidents, handlers, integrations, ingestion, webhook, webhookLimiters, queue, analysis, aiSuggestions, aiUserLimiter, worker, newWorker, limiters, register, join, close: () => testDb.drop() };

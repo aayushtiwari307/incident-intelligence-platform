@@ -11,7 +11,7 @@
     "dev:run": "node --watch-path=dist --env-file-if-exists=.env dist/main.js",
     "start": "node dist/main.js",
     "test": "jest",
-    "test:integration": "jest -c jest.integration.config.js --runInBand",
+    "test:integration": "node ../../scripts/check-integration-db-host.mjs && jest -c jest.integration.config.js --runInBand",
     "migrate": "node --env-file-if-exists=.env dist/db/migrate/cli.js apply",
     "migrate:status": "node --env-file-if-exists=.env dist/db/migrate/cli.js check",
     "dev": "node scripts/dev.mjs"
@@ -26,7 +26,7 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "socket.io": "4.8.4",
-    "zod": "3.25.76"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@nestjs/testing": "11.2.7",

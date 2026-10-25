@@ -59,6 +59,50 @@ describe("HTTP behaviour (real PostgreSQL)", () => {
     assert.equal(r.result?.headers?.["Cache-Control"], "no-store");
   });
 
+  it("invite-only mode blocks public signup but still permits invited registration", async () => {
+    const restrictedApp = await createTestApp({ publicRegistrationEnabled: false });
+    try {
+      const blocked = await call(restrictedApp.handlers.register(req({
+        method: "POST",
+        body: {
+          email: "public-signup@example.com",
+          password: PASSWORD,
+          displayName: "Public",
+          organizationName: "Public org",
+        },
+      })));
+      assert.equal(blocked.status, 403);
+      assert.equal(blocked.body.error.code, "FORBIDDEN");
+
+      const usersAfterBlock = await restrictedApp.testDb.query<{ n: string }>("SELECT count(*) AS n FROM users");
+      assert.equal(usersAfterBlock[0]?.n, "0");
+
+      // Simulate an already-existing owner who sends an invitation.
+      const owner = await restrictedApp.register("existing-owner@example.com");
+      const invite = await restrictedApp.organizations.createInvite(
+        owner.auth,
+        { email: "invited-user@example.com", role: "viewer" },
+      );
+      const invited = await call(restrictedApp.handlers.registerWithInvite(req({
+        method: "POST",
+        body: {
+          email: "invited-user@example.com",
+          password: PASSWORD,
+          displayName: "Invited",
+          inviteToken: invite.token,
+        },
+      })));
+
+      assert.equal(invited.status, 201);
+      assert.equal(invited.body.activeOrganizationId, owner.me.activeOrganizationId);
+      assert.equal(invited.body.role, "viewer");
+      const organizations = await restrictedApp.testDb.query<{ n: string }>("SELECT count(*) AS n FROM organizations");
+      assert.equal(organizations[0]?.n, "1");
+    } finally {
+      await restrictedApp.close();
+    }
+  });
+
   it("register-with-invite creates a session directly in the invited organization", async () => {
     const owner = await signUp("owner-register-invite@example.com");
     const invite = await call(app.handlers.createInvite(req({
@@ -244,5 +288,105 @@ describe("HTTP behaviour (real PostgreSQL)", () => {
     assert.equal((await call(app.handlers.listMembers(req({ cookie: viewer.cookie })))).status, 200);
     const promote = await call(app.handlers.changeRole(req({ method: "PATCH", cookie: viewer.cookie, params: { userId: viewer.me.user.id }, body: { role: "owner" } })));
     assert.equal(promote.status, 403, "self-promotion is refused");
+  });
+});
+
+describe("invite-only mode: public sign-up refused, invitations and sign-in intact (real PostgreSQL)", () => {
+  let app: TestApp;
+  beforeEach(async () => {
+    app = await createTestApp({ publicRegistrationEnabled: false });
+  });
+  afterEach(async () => {
+    await app.close();
+  });
+
+  const count = async (table: "users" | "organizations" | "organization_invites"): Promise<number> =>
+    Number((await app.testDb.query<{ n: string }>(`SELECT count(*) AS n FROM ${table}`))[0]?.n);
+  const inviteBody = (email: string, inviteToken: unknown) => ({ email, password: PASSWORD, displayName: "Invitee", inviteToken });
+  const post = (body: unknown) => req({ method: "POST", body });
+
+  it("advertises the policy to the sign-up page as a public, uncached response", async () => {
+    const r = await call(Promise.resolve(app.handlers.registrationPolicy()));
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { publicRegistration: false });
+    assert.equal(r.result?.headers?.["Cache-Control"], "no-store");
+
+    const open = await createTestApp();
+    try {
+      assert.deepEqual((await call(Promise.resolve(open.handlers.registrationPolicy()))).body, { publicRegistration: true });
+    } finally {
+      await open.close();
+    }
+  });
+
+  it("refuses public registration whatever the body is, and creates nothing", async () => {
+    const valid = { email: "public@example.com", password: PASSWORD, displayName: "P", organizationName: "P org" };
+    for (const body of [undefined, {}, { email: "x" }, valid]) {
+      const r = await call(app.handlers.register(post(body)));
+      assert.equal(r.status, 403);
+      assert.equal(r.body.error.code, "FORBIDDEN");
+    }
+    assert.equal(await count("users"), 0);
+    assert.equal(await count("organizations"), 0);
+  });
+
+  it("still lets an existing user sign in", async () => {
+    await app.register("returning@example.com");
+    const r = await call(app.handlers.login(post({ email: "returning@example.com", password: PASSWORD })));
+    assert.equal(r.status, 200);
+    assert.ok(r.result?.setCookie, "a session cookie is issued");
+    const bad = await call(app.handlers.login(post({ email: "returning@example.com", password: `${PASSWORD}x` })));
+    assert.equal(bad.status, 401);
+  });
+
+  it("an invitation creates exactly one account; reusing it is refused and creates nothing", async () => {
+    const owner = await app.register("owner@example.com");
+    const invite = await app.organizations.createInvite(owner.auth, { email: "new@example.com", role: "viewer" });
+    const first = await call(app.handlers.registerWithInvite(post(inviteBody("new@example.com", invite.token))));
+    assert.equal(first.status, 201);
+    const users = await count("users");
+    const second = await call(app.handlers.registerWithInvite(post(inviteBody("new@example.com", invite.token))));
+    assert.ok([404, 409].includes(second.status), `reuse must be refused, got ${second.status}`);
+    assert.equal(await count("users"), users);
+  });
+
+  it("an invitation for another email address is refused and stays usable by its real recipient", async () => {
+    const owner = await app.register("owner@example.com");
+    const invite = await app.organizations.createInvite(owner.auth, { email: "intended@example.com", role: "viewer" });
+    const users = await count("users");
+    const wrong = await call(app.handlers.registerWithInvite(post(inviteBody("someone-else@example.com", invite.token))));
+    assert.equal(wrong.status, 404);
+    assert.equal(await count("users"), users);
+    const right = await call(app.handlers.registerWithInvite(post(inviteBody("intended@example.com", invite.token))));
+    assert.equal(right.status, 201);
+  });
+
+  it("expired and revoked invitations are refused", async () => {
+    const owner = await app.register("owner@example.com");
+    const expired = await app.organizations.createInvite(owner.auth, { email: "expired@example.com", role: "viewer" });
+    await app.testDb.query("UPDATE organization_invites SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day' WHERE id = $1", [expired.id]);
+    const revoked = await app.organizations.createInvite(owner.auth, { email: "revoked@example.com", role: "viewer" });
+    await app.organizations.revokeInvite(owner.auth, revoked.id);
+    const users = await count("users");
+    for (const [email, token] of [["expired@example.com", expired.token], ["revoked@example.com", revoked.token]] as const) {
+      assert.equal((await call(app.handlers.registerWithInvite(post(inviteBody(email, token))))).status, 404, email);
+    }
+    assert.equal(await count("users"), users);
+  });
+
+  it("a missing, blank, short or non-string invitation token is a validation error and creates nothing", async () => {
+    const users = await count("users");
+    for (const token of [undefined, "", "   ", "short", 12345, null]) {
+      const r = await call(app.handlers.registerWithInvite(post(inviteBody("nobody@example.com", token))));
+      assert.equal(r.status, 400, `token ${JSON.stringify(token)}`);
+      assert.equal(r.body.error.code, "VALIDATION_FAILED");
+    }
+    assert.equal(await count("users"), users);
+  });
+
+  it("a foreign Origin is refused before the policy is even consulted", async () => {
+    const r = await call(app.handlers.register(req({ method: "POST", origin: "https://evil.example", body: {} })));
+    assert.equal(r.status, 403);
+    assert.equal(r.body.error.code, "ORIGIN_NOT_ALLOWED");
   });
 });

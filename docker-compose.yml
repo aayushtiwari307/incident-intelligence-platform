@@ -1,8 +1,8 @@
-﻿# Local development dependency (PostgreSQL) is the default profile. Redis was removed in Milestone 5: nothing in the
+# Local development dependency (PostgreSQL) is the default profile. Redis was removed in Milestone 5: nothing in the
 # API connects to it (the job queue and real-time layer use PostgreSQL only); add it back when a consumer exists.
 # The optional "app" profile also builds and runs the production API + web containers.
 # For the single-origin reverse-proxy topology add docker-compose.edge.yml (see docs/DEVELOPMENT.md).
-# All host bindings remain loopback-only and port 5434 avoids the reference stack.
+# All host bindings remain loopback-only and port 5545 avoids the reference stack.
 services:
   postgres:
     image: postgres:16
@@ -37,7 +37,12 @@ services:
       # Optional and unused by the API; passed through only so "present" and "absent" can both be verified.
       REDIS_URL: ${REDIS_URL:-}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
-      REALTIME_ENABLED: ${REALTIME_ENABLED:-true}
+      REALTIME_ENABLED: ${REALTIME_ENABLED:-false}
+      # Real-time needs its own direct (non-pooled) PostgreSQL connection; this stack's postgres container is one.
+      REALTIME_DATABASE_URL: postgresql://${POSTGRES_USER:-platform}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-platform}
+      # This local stack runs with NODE_ENV=production but is a throw-away test bed: the CI smoke test registers users
+      # through the public endpoint. The deployed demo does not set this, so it keeps the production default (refused).
+      PUBLIC_REGISTRATION_ENABLED: ${PUBLIC_REGISTRATION_ENABLED:-true}
       CORS_ORIGINS: "${CORS_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}"
       MIGRATE_ON_START: apply
       LOG_LEVEL: ${LOG_LEVEL:-info}

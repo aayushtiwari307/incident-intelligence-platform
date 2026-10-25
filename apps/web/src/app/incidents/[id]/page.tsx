@@ -14,6 +14,7 @@ import {
 import { AiSuggestionsPanel, type AiDraftRequest } from "../../../components/ai-suggestions-panel";
 import { AnalysisPanel } from "../../../components/analysis-panel";
 import { SimilarIncidentsPanel } from "../../../components/similar-incidents-panel";
+import { IncidentEnrichmentPanels } from "../../../components/incident-enrichment-panels";
 import { AppShell, useCan } from "../../../components/shell";
 import { Field, FormError, LiveStatus, SeverityBadge, StatusBadge } from "../../../components/ui";
 import { ApiError } from "../../../lib/api-client";
@@ -51,6 +52,7 @@ function IncidentDetail() {
   // An AI suggestion turned into a DRAFT: it only pre-fills the normal forms. Nothing is saved until a human submits.
   const [draftSeverity, setDraftSeverity] = useState<IncidentDto["severity"] | null>(null);
   const [commentDraft, setCommentDraft] = useState<{ body: string; nonce: number } | null>(null);
+  const [serviceContextRefreshKey, setServiceContextRefreshKey] = useState(0);
 
   const reload = useCallback(async () => {
     try {
@@ -69,8 +71,12 @@ function IncidentDetail() {
       if (message.incidentId !== id) return;
       setIncident((prev) => acceptSnapshot(prev, message.incident));
       setEvents((prev) => mergeTimeline(prev, [message.event]));
+      if (message.event.type === "change_context") setServiceContextRefreshKey((value) => value + 1);
     },
-    onSync: () => void reload(),
+    onSync: () => {
+      void reload();
+      setServiceContextRefreshKey((value) => value + 1);
+    },
   });
 
   useEffect(() => {
@@ -228,6 +234,8 @@ function IncidentDetail() {
           ) : null}
         </section>
       ) : null}
+
+      <IncidentEnrichmentPanels key={incident.id} incidentId={incident.id} canUpdate={canUpdate} refreshKey={serviceContextRefreshKey} />
 
       <SimilarIncidentsPanel incidentId={incident.id} />
 
