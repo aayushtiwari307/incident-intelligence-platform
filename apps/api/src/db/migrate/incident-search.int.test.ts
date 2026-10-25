@@ -106,7 +106,9 @@ describe("incident resolutions and search documents (real PostgreSQL)", () => {
       .filter((filename) => /^\d{4}_.+\.sql$/.test(filename) && filename.slice(0, 4) >= "0008")
       .sort();
     assert.equal(expectedApplied[0], "0008_incident_resolutions_search.sql", "the run must start at migration 0008");
-    assert.deepEqual(result.applied, expectedApplied);
+    // Jest runs tests in a vm context, and strict deepEqual also compares array prototypes.
+    // readdirSync returns a Node-core array, so copy both sides into arrays created in this realm.
+    assert.deepEqual([...result.applied], [...expectedApplied]);
   });
 
   afterAll(async () => {
