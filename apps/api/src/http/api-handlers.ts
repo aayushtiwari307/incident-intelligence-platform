@@ -14,6 +14,8 @@ export interface ApiHandlersOptions {
   allowedOrigins: readonly string[];
   secureCookies: boolean;
   sessionTtlSeconds: number;
+  /** Public signup is disabled in production; omitted means enabled for local callers/tests. */
+  publicRegistrationEnabled?: boolean;
   /**
    * Called after a change that can end a live connection's right to receive pushes (logout, organization switch or
    * invitation redemption, member removal). Optional: absent in most tests.
@@ -90,6 +92,9 @@ export class ApiHandlers {
 
   async register(req: HttpRequest): Promise<HttpResult> {
     this.checkOrigin(req);
+    if (this.options.publicRegistrationEnabled === false) {
+      throw new AppError("FORBIDDEN", "Public registration is disabled. Ask an organization owner for an invitation.");
+    }
     const result = await this.auth.register(req.body, { ip: req.ip });
     return this.withSession(result.token, result.me, 201);
   }

@@ -114,25 +114,25 @@ const stringMap = (maxValueLength: number) =>
   z.unknown().transform((value, ctx): StringMap => {
     const out: StringMap = Object.create(null) as StringMap;
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be an object of string values" });
+      ctx.addIssue({ code: "custom", message: "must be an object of string values" });
       return z.NEVER;
     }
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length > MAX_LABELS_PER_MAP) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `at most ${MAX_LABELS_PER_MAP} entries are allowed` });
+      ctx.addIssue({ code: "custom", message: `at most ${MAX_LABELS_PER_MAP} entries are allowed` });
       return z.NEVER;
     }
     for (const [key, entry] of entries) {
       if (!MAP_KEY.test(key) || FORBIDDEN_KEYS.has(key)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key.slice(0, 40)], message: "invalid name (letters, digits and underscore only; at most 128 characters)" });
+        ctx.addIssue({ code: "custom", path: [key.slice(0, 40)], message: "invalid name (letters, digits and underscore only; at most 128 characters)" });
         continue;
       }
       if (typeof entry !== "string") {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: "must be a string" });
+        ctx.addIssue({ code: "custom", path: [key], message: "must be a string" });
         continue;
       }
       if (entry.length > maxValueLength) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `must be at most ${maxValueLength} characters` });
+        ctx.addIssue({ code: "custom", path: [key], message: `must be at most ${maxValueLength} characters` });
         continue;
       }
       out[key] = entry;
@@ -143,13 +143,13 @@ const stringMap = (maxValueLength: number) =>
 const timestamp = z.string().max(40).transform((value, ctx): NormalizedTimestamp => {
   const parsed = normalizeRfc3339(value);
   if (!parsed) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be an RFC 3339 timestamp, for example 2026-10-15T10:00:00Z" });
+    ctx.addIssue({ code: "custom", message: "must be an RFC 3339 timestamp, for example 2026-10-15T10:00:00Z" });
     return z.NEVER;
   }
   return parsed;
 });
 
-const statusSchema = z.enum(["firing", "resolved"], { errorMap: () => ({ message: 'must be "firing" or "resolved"' }) });
+const statusSchema = z.string().refine((value): value is "firing" | "resolved" => value === "firing" || value === "resolved", { error: 'must be "firing" or "resolved"' });
 const url = z.string().max(MAX_URL_LENGTH);
 
 const alertSchema = z.object({
@@ -164,7 +164,7 @@ const alertSchema = z.object({
 
 /** Unknown fields (current and future) are dropped by zod's default "strip" behaviour, so they can never be persisted. */
 const payloadSchema = z.object({
-  version: z.literal("4", { errorMap: () => ({ message: 'unsupported webhook version: only "4" is supported' }) }),
+  version: z.literal("4", { error: 'unsupported webhook version: only "4" is supported' }),
   groupKey: z.string().max(MAX_GROUP_KEY_LENGTH).optional(),
   truncatedAlerts: z.number().int().min(0).max(1_000_000_000).optional(),
   status: statusSchema,
@@ -175,7 +175,7 @@ const payloadSchema = z.object({
   routeLabels: stringMap(MAX_LABEL_VALUE_LENGTH).optional(),
   externalURL: url.optional(),
   notification_reason: z.string().max(128).optional(),
-  alerts: z.array(alertSchema).min(1, "at least one alert is required"),
+  alerts: z.array(alertSchema).min(1, "at least one alert is required").max(ALERTMANAGER_MAX_ALERTS_PER_REQUEST),
 });
 
 // ---------------------------------------------------------------------------------------------

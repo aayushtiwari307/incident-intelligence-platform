@@ -6,9 +6,25 @@ Important evidence boundary: this file retains historical M9 verification record
 
 # Milestone 9 status: Grounded AI and Safety
 
-**Status: M9 VERIFIED (local verification, 2026-10-18).** The reviewed implementation and its independent-review corrections passed the native checks below. This is not deployment, production, or live-provider evidence. No commit, PR, merge, or deployment was performed.
+**Status: M9 VERIFIED locally (initial verification 2026-10-18; fresh Windows rerun 2026-10-24).** The current worktree passed typecheck, lint, 445 unit tests, 257 isolated-PostgreSQL integration tests, API build, and Next.js build. This is not live-provider or production AI evidence. The original 2026-10-18 results are retained below.
 
 Design: [ADR 0019](../decisions/0019-grounded-ai-suggestions.md). Migration: `apps/api/migrations/0012_grounded_ai_suggestions.sql`. Migrations 0001–0011 were not modified.
+
+## Fresh Windows verification (2026-10-24)
+
+Fresh checks from the current Windows worktree:
+- `npm run typecheck` — PASS.
+- `npm run lint` — PASS.
+- `npm test` — 445 passed: repository scripts 55, shared 43, API 272, web 75.
+- `npm run test:integration` — 257 passed across 20 suites against temporary PostgreSQL 16.
+- `npm run build -w @platform/api` — PASS.
+- `npm run build -w @platform/web` — PASS.
+
+Both `DATABASE_URL` and `TEST_DATABASE_URL` were checked as `127.0.0.1`. PostgreSQL was bound to loopback only. No Neon connection was used. The temporary container was removed afterward and prior process-level database environment variables were restored. The unit run emitted non-fatal TS151002 warnings.
+
+The Next.js build used version 16.4.0. It displayed an upgrade prompt for 16.4.3, but this run did not apply that upgrade.
+
+The latest visible successful GitHub Actions run was CI #18 on `3fdfb63`; no newer run was visible for documentation-only commit `afc75d5`. Local verification and CI evidence are separate.
 
 ## Native verification
 

@@ -149,3 +149,9 @@ For a future hosted acceptance test, verify `/health/live`, sign-up/sign-in and 
 - If Render sleeps, wait for its cold start; do not upgrade to avoid it. If a free quota is exhausted, wait for reset rather than enabling paid usage.
 - If readiness fails, inspect redacted startup logs, verify `DATABASE_URL` and that migration status is current, and correct configuration. Never reset/drop the database to make startup pass. Apply only forward migrations through the documented CLI after confirming the target is the newly created demo database.
 - Monitor Neon storage/compute quotas and Render free instance hours. If the demo reaches a free limit, pause the demo; do not enable billing or migrate data as part of an automatic recovery.
+
+## Registration policy (2026-10-24)
+
+**Chosen policy: invite-only for the deployed production demo.** The API rejects public `POST /api/auth/register` requests with HTTP 403 in production. Existing users can still sign in, organization owners can create invitations, and first-time invited users can register through `POST /api/auth/register-with-invite`. Local development and tests retain public registration.
+
+**Deployment status:** this implementation is local-only until a future authorized deployment. Render automatic deployment is disabled. The currently deployed service still runs its previously deployed code; do not claim public sign-up is blocked on the live demo until the updated code has been deployed and verified.

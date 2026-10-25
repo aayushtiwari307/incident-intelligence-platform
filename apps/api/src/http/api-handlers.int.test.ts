@@ -59,6 +59,50 @@ describe("HTTP behaviour (real PostgreSQL)", () => {
     assert.equal(r.result?.headers?.["Cache-Control"], "no-store");
   });
 
+  it("invite-only mode blocks public signup but still permits invited registration", async () => {
+    const restrictedApp = await createTestApp({ publicRegistrationEnabled: false });
+    try {
+      const blocked = await call(restrictedApp.handlers.register(req({
+        method: "POST",
+        body: {
+          email: "public-signup@example.com",
+          password: PASSWORD,
+          displayName: "Public",
+          organizationName: "Public org",
+        },
+      })));
+      assert.equal(blocked.status, 403);
+      assert.equal(blocked.body.error.code, "FORBIDDEN");
+
+      const usersAfterBlock = await restrictedApp.testDb.query<{ n: string }>("SELECT count(*) AS n FROM users");
+      assert.equal(usersAfterBlock[0]?.n, "0");
+
+      // Simulate an already-existing owner who sends an invitation.
+      const owner = await restrictedApp.register("existing-owner@example.com");
+      const invite = await restrictedApp.organizations.createInvite(
+        owner.auth,
+        { email: "invited-user@example.com", role: "viewer" },
+      );
+      const invited = await call(restrictedApp.handlers.registerWithInvite(req({
+        method: "POST",
+        body: {
+          email: "invited-user@example.com",
+          password: PASSWORD,
+          displayName: "Invited",
+          inviteToken: invite.token,
+        },
+      })));
+
+      assert.equal(invited.status, 201);
+      assert.equal(invited.body.activeOrganizationId, owner.me.activeOrganizationId);
+      assert.equal(invited.body.role, "viewer");
+      const organizations = await restrictedApp.testDb.query<{ n: string }>("SELECT count(*) AS n FROM organizations");
+      assert.equal(organizations[0]?.n, "1");
+    } finally {
+      await restrictedApp.close();
+    }
+  });
+
   it("register-with-invite creates a session directly in the invited organization", async () => {
     const owner = await signUp("owner-register-invite@example.com");
     const invite = await call(app.handlers.createInvite(req({

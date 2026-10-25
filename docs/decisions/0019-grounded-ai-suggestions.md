@@ -8,7 +8,7 @@ The remainder of this ADR is retained as the original M9 design/verification rec
 
 # 0019. Grounded AI suggestions (Milestone 9)
 
-Status: implemented in source 2026-10-18; **not accepted**. Testing deferred (see `docs/verification/milestone-9-status.md`).
+Status: implemented and merged; fresh local verification passed on 2026-10-24. Live-provider and production AI behavior remain unverified; deployed AI stays disabled under the zero-budget plan. See `docs/verification/milestone-9-status.md`.
 
 ## Context
 M2 added an advisory AI analysis. M8 added tenant-scoped similar-incident retrieval. M9 combines them: a responder asks for a
