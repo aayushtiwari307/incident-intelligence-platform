@@ -100,13 +100,13 @@ describe("incident resolutions and search documents (real PostgreSQL)", () => {
     }
 
     const result = await runMigrations(db.connect, { mode: "apply", directory: migrationsDirectory });
-    assert.deepEqual(result.applied, [
-      "0008_incident_resolutions_search.sql",
-      "0009_resolution_audit_events.sql",
-      "0010_resolution_nonblank_text.sql",
-      "0011_resolution_raw_text_length.sql",
-      "0012_grounded_ai_suggestions.sql",
-    ]);
+    // Every migration after 0007 is applied by this run. Derive the list from the directory
+    // so adding a new migration does not require editing this test.
+    const expectedApplied = readdirSync(migrationsDirectory)
+      .filter((filename) => /^\d{4}_.+\.sql$/.test(filename) && filename.slice(0, 4) >= "0008")
+      .sort();
+    assert.equal(expectedApplied[0], "0008_incident_resolutions_search.sql", "the run must start at migration 0008");
+    assert.deepEqual(result.applied, expectedApplied);
   });
 
   afterAll(async () => {
