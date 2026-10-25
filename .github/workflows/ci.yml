@@ -43,7 +43,12 @@ jobs:
       - run: npm run test:integration
       - run: npm run build
       - name: Prepare local-only Compose configuration
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          # The shipped default keeps real-time off (hosted demo). This throw-away CI stack turns it on
+          # so the smoke test can verify real-time.
+          sed -i '/^REALTIME_ENABLED=/d' .env
+          printf '\nREALTIME_ENABLED=true\n' >> .env
       - name: Validate Compose files (default, app, and single-origin edge topology)
         run: |
           docker compose config --quiet
