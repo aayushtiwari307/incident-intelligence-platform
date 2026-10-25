@@ -1,3 +1,9 @@
+# Current-snapshot re-review (2026-10-24)
+
+The sections below retain older milestone evidence as a historical ledger. In the current source, realtime is disabled by default, requires a dedicated `REALTIME_DATABASE_URL` when enabled, and never falls back to `DATABASE_URL`. On the 2026-10-25 integrated source, `node --test "scripts/*.test.mjs"` passed 82/82 and TypeScript syntax parsing passed for 185 files. Full Jest/typecheck/lint/build/integration verification of the new GitHub/M10 feature code remains pending; see the root `CODING-COMPLETION-REPORT.md` and `../deployment/realtime-rollout.md`. Live production settings remain unverified.
+
+---
+
 # Milestone 5 status and evidence ledger (2026-10-14)
 
 **Milestone 5 is IMPLEMENTED IN SOURCE and is NOT ACCEPTED.** Acceptance needs the checks in section 4 to pass on Windows and in GitHub Actions, and the manual two-browser check in section 5 to be performed by a person.

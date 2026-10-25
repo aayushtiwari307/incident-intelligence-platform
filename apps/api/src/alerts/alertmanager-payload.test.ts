@@ -90,6 +90,7 @@ describe("standard v4 payloads", () => {
     assert.equal(a.endsAt, null, "Go zero time means still firing");
     assert.equal(a.severity, "sev1");
     assert.equal(a.title, "HighLatency: p99 latency above 2s");
+    assert.equal(a.serviceName, null, "a missing service label must not link an incident to an arbitrary catalog entry");
     assert.match(a.description, /Summary: p99 latency above 2s/);
     assert.match(a.description, /Labels: alertname=HighLatency, severity=critical, job=api, instance=10\.0\.0\.1:9100/);
     assert.ok(!a.description.includes("prometheus.example"), "generatorURL is never stored");
@@ -113,6 +114,14 @@ describe("standard v4 payloads", () => {
     const parsed = parseAlertmanagerPayload(minimal, NOW).alerts[0]!;
     assert.equal(parsed.title, "Alertmanager alert");
     assert.equal(parsed.severity, "sev3");
+  });
+
+  it("projects a bounded service label for same-organization automatic service linking", () => {
+    const withService = parseAlertmanagerPayload(payload({}, [alert({ labels: { alertname: "CheckoutLatency", service: " checkout ", severity: "warning" } })]), NOW).alerts[0]!;
+    assert.equal(withService.serviceName, "checkout");
+
+    const tooLong = parseAlertmanagerPayload(payload({}, [alert({ labels: { alertname: "CheckoutLatency", service: "x".repeat(1_024), severity: "warning" } })]), NOW).alerts[0]!;
+    assert.equal(tooLong.serviceName?.length, 100, "service values are bounded before database matching");
   });
 
   it("orders alerts deterministically and collapses identical entries inside one request", () => {

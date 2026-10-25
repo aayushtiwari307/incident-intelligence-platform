@@ -3,6 +3,10 @@ import type { Request, Response } from "express";
 import { AlertWebhookHandlers } from "../alerts/webhook-handlers";
 import { ApiHandlers } from "./api-handlers";
 import { readJsonBody } from "./webhook-body";
+import { SessionContext } from "./session-context";
+import { GithubIssueService } from "../github/github-issue.service";
+import { ServiceCatalogService } from "../services/service-catalog.service";
+import { ChangeWebhookHandlers } from "../services/change-webhook-handlers";
 import type { HttpRequest, HttpResult } from "./http-types";
 
 export function toHttpRequest(req: Request, body: unknown): HttpRequest {
@@ -14,6 +18,10 @@ export function toHttpRequest(req: Request, body: unknown): HttpRequest {
     query: req.query as Record<string, unknown>,
     params: req.params as Record<string, string>,
   };
+}
+
+function routeParam(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 /** Writes an HttpResult to the Express response. The only place Express response methods are used for API routes. */
@@ -28,6 +36,11 @@ export function send(res: Response, result: HttpResult): unknown {
 @Controller("api/auth")
 export class AuthController {
   constructor(@Inject(ApiHandlers) private readonly h: ApiHandlers) {}
+
+  @Get("registration-policy")
+  async registrationPolicy(@Res() res: Response) {
+    return send(res, this.h.registrationPolicy());
+  }
 
   @Post("register")
   async register(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
@@ -249,6 +262,7 @@ export class IntegrationWebhookController {
   constructor(
     @Inject(AlertWebhookHandlers) private readonly h: AlertWebhookHandlers,
     @Inject(WEBHOOK_BODY_LIMIT) private readonly limitBytes: number,
+    @Inject(ChangeWebhookHandlers) private readonly changeHandlers: ChangeWebhookHandlers,
   ) {}
 
   @Post("alertmanager")
@@ -262,5 +276,104 @@ export class IntegrationWebhookController {
         readJson: () => readJsonBody(req, { limitBytes: this.limitBytes }),
       }),
     );
+  }
+
+  @Post("changes")
+  @HttpCode(200)
+  async changeEvent(@Req() req: Request, @Res() res: Response) {
+    return send(res, await this.changeHandlers.changeEvent({
+      ip: req.ip ?? "unknown",
+      headers: req.headers,
+      readJson: () => readJsonBody(req, { limitBytes: this.limitBytes }),
+    }));
+  }
+}
+
+
+@Controller("api/organization/github")
+export class GithubSettingsController {
+  constructor(@Inject(SessionContext) private readonly session: SessionContext, @Inject(GithubIssueService) private readonly github: GithubIssueService) {}
+
+  @Get()
+  async get(@Req() req: Request, @Res() res: Response) {
+    return send(res, { status: 200, body: await this.github.settings(await this.session.authenticate(req)), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Put()
+  async update(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 200, body: await this.github.updateSettings(await this.session.authenticate(req), body), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Post("repositories")
+  async addRepository(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 201, body: await this.github.addRepository(await this.session.authenticate(req), body), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Delete("repositories/:id")
+  async removeRepository(@Req() req: Request, @Res() res: Response) {
+    await this.github.removeRepository(await this.session.authenticate(req), routeParam(req.params.id));
+    return send(res, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }
+}
+
+@Controller("api/incidents")
+export class IncidentGithubController {
+  constructor(@Inject(SessionContext) private readonly session: SessionContext, @Inject(GithubIssueService) private readonly github: GithubIssueService) {}
+
+  @Get(":id/github-issue")
+  async get(@Req() req: Request, @Res() res: Response) {
+    return send(res, { status: 200, body: await this.github.context(await this.session.authenticate(req), routeParam(req.params.id)), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Post(":id/github-issue")
+  async link(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 200, body: await this.github.linkIssue(await this.session.authenticate(req), routeParam(req.params.id), body), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Delete(":id/github-issue")
+  async unlink(@Req() req: Request, @Res() res: Response) {
+    await this.github.unlinkIssue(await this.session.authenticate(req), routeParam(req.params.id));
+    return send(res, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }
+}
+
+@Controller("api/organization/services")
+export class ServicesController {
+  constructor(@Inject(SessionContext) private readonly session: SessionContext, @Inject(ServiceCatalogService) private readonly services: ServiceCatalogService) {}
+
+  @Get()
+  async list(@Req() req: Request, @Res() res: Response) {
+    return send(res, { status: 200, body: { items: await this.services.list(await this.session.authenticate(req)) }, headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Post()
+  async create(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 201, body: await this.services.create(await this.session.authenticate(req), body), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Patch(":id")
+  async update(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 200, body: await this.services.update(await this.session.authenticate(req), routeParam(req.params.id), body), headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Delete(":id")
+  async remove(@Req() req: Request, @Res() res: Response) {
+    await this.services.remove(await this.session.authenticate(req), routeParam(req.params.id));
+    return send(res, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }
+}
+
+@Controller("api/incidents")
+export class IncidentServiceContextController {
+  constructor(@Inject(SessionContext) private readonly session: SessionContext, @Inject(ServiceCatalogService) private readonly services: ServiceCatalogService) {}
+
+  @Put(":id/service")
+  async linkService(@Req() req: Request, @Res() res: Response, @Body() body: unknown) {
+    return send(res, { status: 200, body: { service: await this.services.linkIncident(await this.session.authenticate(req), routeParam(req.params.id), body) }, headers: { "Cache-Control": "no-store" } });
+  }
+
+  @Get(":id/service-context")
+  async serviceContext(@Req() req: Request, @Res() res: Response) {
+    return send(res, { status: 200, body: await this.services.incidentContext(await this.session.authenticate(req), routeParam(req.params.id)), headers: { "Cache-Control": "no-store" } });
   }
 }

@@ -3,7 +3,7 @@ import { ALERT_DELIVERY_RESULTS, ALERTMANAGER_MAX_ALERTS_PER_REQUEST, MAX_ACTIVE
 
 describe("integration schemas", () => {
   it("accepts a trimmed name and nothing else (strict: no organization id can be smuggled in)", () => {
-    assert.deepEqual(createIntegrationSchema.parse({ name: "  prod alertmanager " }), { name: "prod alertmanager" });
+    assert.deepEqual(createIntegrationSchema.parse({ name: "  prod alertmanager " }), { name: "prod alertmanager", kind: "alertmanager" });
     assert.equal(createIntegrationSchema.safeParse({ name: "x", organizationId: "00000000-0000-0000-0000-000000000000" }).success, false);
     assert.equal(createIntegrationSchema.safeParse({}).success, false);
   });

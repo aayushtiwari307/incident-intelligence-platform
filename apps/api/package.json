@@ -11,7 +11,7 @@
     "dev:run": "node --watch-path=dist --env-file-if-exists=.env dist/main.js",
     "start": "node dist/main.js",
     "test": "jest",
-    "test:integration": "jest -c jest.integration.config.js --runInBand",
+    "test:integration": "node ../../scripts/check-integration-db-host.mjs && jest -c jest.integration.config.js --runInBand",
     "migrate": "node --env-file-if-exists=.env dist/db/migrate/cli.js apply",
     "migrate:status": "node --env-file-if-exists=.env dist/db/migrate/cli.js check",
     "dev": "node scripts/dev.mjs"

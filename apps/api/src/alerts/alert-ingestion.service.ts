@@ -58,7 +58,7 @@ export class AlertIngestionService {
   async authenticate(token: string): Promise<AuthenticatedIntegration | null> {
     const tokenHash = hashToken(token);
     const found = await this.db.query<{ id: string; organization_id: string; name: string }>(
-      "SELECT id, organization_id, name FROM integrations WHERE token_hash = $1 AND revoked_at IS NULL",
+      "SELECT id, organization_id, name FROM integrations WHERE token_hash = $1 AND kind = 'alertmanager' AND revoked_at IS NULL",
       [tokenHash],
     );
     const row = found.rows[0];
@@ -69,7 +69,7 @@ export class AlertIngestionService {
     const results = await this.db.tx(async (tx) => {
       await tx.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
       const valid = await tx.query(
-        `SELECT 1 FROM integrations WHERE id = $1 AND organization_id = $2 AND token_hash = $3 AND revoked_at IS NULL FOR SHARE`,
+        `SELECT 1 FROM integrations WHERE id = $1 AND organization_id = $2 AND token_hash = $3 AND kind = 'alertmanager' AND revoked_at IS NULL FOR SHARE`,
         [integration.id, integration.organizationId, integration.tokenHash],
       );
       if (valid.rows.length === 0) throw bad();
@@ -130,6 +130,7 @@ export class AlertIngestionService {
         title: alert.title,
         description: alert.description,
         severity: alert.severity,
+        serviceName: alert.serviceName,
         actor,
         eventPayload: { source: "alertmanager", integrationId: integration.id, fingerprint: alert.fingerprint, startsAt: alert.startsAt },
       });

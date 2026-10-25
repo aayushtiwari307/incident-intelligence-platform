@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Repository hygiene checks, run in CI and before commits:
-//   1. No real .env files are tracked (only *.example).
+//   1. No real .env files are tracked (or present in a ZIP source-tree scan; only *.example is allowed).
 //   2. No archives (zip/tar/tgz/gz) are tracked; the reference ZIP contained real .env files.
 //   3. Frontend env files contain no secret-looking variable names, and NEXT_PUBLIC_ variables
 //      never look like secrets (they are embedded in the browser bundle).
 //   4. No obvious credential patterns appear in tracked text files.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SECRETY_NAME = /(SECRET|PASSWORD|PASSWD|TOKEN|PRIVATE|API_?KEY|CREDENTIAL)/i;
@@ -48,9 +49,32 @@ export function findCredentialPatterns(text) {
   return CREDENTIAL_PATTERNS.filter(({ re }) => re.test(text)).map(({ name }) => name);
 }
 
-function trackedFiles() {
-  const out = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return out.split("\0").filter(Boolean);
+const GENERATED_DIRS = new Set([".git", "node_modules", ".next", "coverage", "dist", ".turbo", "out", "build", "test-results", "playwright-report"]);
+
+export function sourceTreeFiles(root) {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        if (!GENERATED_DIRS.has(entry.name)) walk(join(dir, entry.name));
+      } else if (entry.isFile()) {
+        files.push(relative(root, join(dir, entry.name)).split(sep).join("/"));
+      }
+    }
+  };
+  walk(root);
+  return files.sort();
+}
+
+function trackedFiles(root = process.cwd()) {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    return out.split("\0").filter(Boolean);
+  } catch {
+    // ZIP handoffs normally omit .git. Scan the source tree in that case, excluding generated directories.
+    return sourceTreeFiles(root);
+  }
 }
 
 function isProbablyText(path) {
@@ -58,7 +82,7 @@ function isProbablyText(path) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const files = trackedFiles();
+  const files = trackedFiles(process.cwd());
   const problems = [];
 
   for (const f of findTrackedEnvFiles(files)) problems.push(`tracked env file: ${f}`);
@@ -88,5 +112,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     for (const p of problems) console.error(`  - ${p}`);
     process.exit(1);
   }
-  console.log(`Repository hygiene OK (${files.length} tracked files checked).`);
+  console.log(`Repository hygiene OK (${files.length} files checked).`);
 }

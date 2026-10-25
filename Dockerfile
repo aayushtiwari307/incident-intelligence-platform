@@ -11,7 +11,11 @@ WORKDIR /app
 COPY . .
 RUN npm run build -w @platform/shared
 RUN npm run build -w @platform/api
-RUN NEXT_PUBLIC_API_URL="" NEXT_PUBLIC_REALTIME_ENABLED=false npm run build -w @platform/web
+# Next.js inlines NEXT_PUBLIC_* at BUILD time, so the browser-side real-time switch cannot be changed at runtime. It stays
+# false unless the build is given NEXT_PUBLIC_REALTIME_ENABLED=true. Render injects a service's environment variables as
+# Docker build args with the same names, so setting it there and redeploying is enough (see docs/deployment/realtime-rollout.md).
+ARG NEXT_PUBLIC_REALTIME_ENABLED=false
+RUN NEXT_PUBLIC_API_URL="" NEXT_PUBLIC_REALTIME_ENABLED="${NEXT_PUBLIC_REALTIME_ENABLED}" npm run build -w @platform/web
 RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM caddy:2.8.4-alpine AS caddy

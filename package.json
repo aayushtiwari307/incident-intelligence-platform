@@ -33,7 +33,12 @@
     "health": "node scripts/check-health.mjs",
     "smoke:stack": "node scripts/smoke-stack.mjs",
     "services:reset": "docker compose down -v && docker compose up -d --wait",
-    "simulate:alertmanager": "node scripts/simulate-alertmanager.mjs"
+    "simulate:alertmanager": "node scripts/simulate-alertmanager.mjs",
+    "simulate:change": "node scripts/simulate-change.mjs",
+    "smoke:realtime": "node scripts/smoke-realtime.mjs",
+    "smoke:public-realtime": "node scripts/smoke-public-realtime.mjs",
+    "db:backup": "node scripts/db-backup.mjs",
+    "db:restore": "node scripts/db-restore.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

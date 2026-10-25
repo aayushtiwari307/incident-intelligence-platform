@@ -6,7 +6,7 @@ import { z } from "zod";
 // the organization of a management call comes from the session, and the organization of a webhook delivery comes
 // from the validated credential record.
 
-export const INTEGRATION_KINDS = ["alertmanager"] as const;
+export const INTEGRATION_KINDS = ["alertmanager", "change-events"] as const;
 export type IntegrationKind = (typeof INTEGRATION_KINDS)[number];
 
 /** Hard cap on non-revoked integrations per organization (bounds credential sprawl). */
@@ -26,7 +26,7 @@ export const integrationNameSchema = z
   .max(60, "Name must be at most 60 characters")
   .regex(NO_CONTROL_CHARS, "Name must not contain control characters");
 
-export const createIntegrationSchema = z.object({ name: integrationNameSchema }).strict();
+export const createIntegrationSchema = z.object({ name: integrationNameSchema, kind: z.enum(INTEGRATION_KINDS).default("alertmanager") }).strict();
 
 export type IntegrationStatus = "active" | "revoked";
 

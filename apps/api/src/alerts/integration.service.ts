@@ -93,8 +93,8 @@ export class IntegrationService {
         }
         const inserted = await tx.query<{ id: string }>(
           `INSERT INTO integrations (organization_id, kind, name, token_hash, created_by)
-           VALUES ($1, 'alertmanager', $2, $3, $4) RETURNING id`,
-          [organizationId, parsed.data.name, hashToken(token), auth.userId],
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [organizationId, parsed.data.kind, parsed.data.name, hashToken(token), auth.userId],
         );
         return (inserted.rows[0] as { id: string }).id;
       });

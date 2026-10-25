@@ -191,6 +191,8 @@ export interface ParsedAlert {
   severity: IncidentSeverity;
   title: string;
   description: string;
+  /** Optional service label used only to link the incident to a same-organization catalog entry. */
+  serviceName: string | null;
 }
 
 export interface ParsedDelivery {
@@ -236,7 +238,8 @@ function project(alert: z.infer<typeof alertSchema>): ParsedAlert {
   ];
 
   const endsAt = alert.endsAt && !isGoZeroTime(alert.endsAt.iso) ? alert.endsAt.iso : null;
-  return { status: alert.status, fingerprint: alert.fingerprint, startsAt: alert.startsAt.iso, endsAt, severity, title, description: lines.join("\n") };
+  const serviceName = cleanLine(labels.service, 100).trim() || null;
+  return { status: alert.status, fingerprint: alert.fingerprint, startsAt: alert.startsAt.iso, endsAt, severity, title, description: lines.join("\n"), serviceName };
 }
 
 const statusRank = (s: "firing" | "resolved"): number => (s === "firing" ? 0 : 1);

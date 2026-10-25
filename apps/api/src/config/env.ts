@@ -40,17 +40,17 @@ function urlWithProtocols(protocols: readonly string[], requirePath: boolean) {
     try {
       parsed = new URL(value);
     } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be a valid URL" });
+      ctx.addIssue({ code: "custom", message: "must be a valid URL" });
       return;
     }
     if (!protocols.includes(parsed.protocol)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `must use one of: ${protocols.join(", ")}` });
+      ctx.addIssue({ code: "custom", message: `must use one of: ${protocols.join(", ")}` });
     }
     if (!parsed.hostname) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must include a host" });
+      ctx.addIssue({ code: "custom", message: "must include a host" });
     }
     if (requirePath && parsed.pathname.length <= 1) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must include a database name" });
+      ctx.addIssue({ code: "custom", message: "must include a database name" });
     }
   };
 }
@@ -62,6 +62,8 @@ const envSchema = z.object({
   API_HOST: z.string().min(1).max(255).optional(),
   API_PORT: envInt(1, 65535).optional(),
   DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)),
+  // Optional dedicated session connection for LISTEN/NOTIFY; defaults to DATABASE_URL.
+  REALTIME_DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)).optional(),
   // Optional: nothing in the API connects to Redis (the job queue and real-time layer use PostgreSQL only). It is still
   // validated when present, so a typo is reported instead of silently ignored.
   REDIS_URL: z.string().superRefine(urlWithProtocols(["redis:", "rediss:"], false)).optional(),
@@ -89,6 +91,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   REALTIME_ENABLED: z.string().optional(),
   REALTIME_REVALIDATE_SECONDS: envInt(1, 300).optional(),
+  PUBLIC_REGISTRATION_ENABLED: z.string().optional(),
 });
 
 export type NodeEnv = "development" | "test" | "production";
@@ -126,8 +129,8 @@ export interface AppConfig {
     /** Own limit for server-to-server webhooks (Alertmanager notifications are larger than browser requests). */
     webhookBodyLimitBytes: number;
   };
-  auth: { sessionTtlSeconds: number; inviteTtlSeconds: number };
-  database: { url: Secret; poolMax: number; connectTimeoutMs: number; statementTimeoutMs: number };
+  auth: { sessionTtlSeconds: number; inviteTtlSeconds: number; publicRegistrationEnabled: boolean };
+  database: { url: Secret; realtimeUrl?: Secret; poolMax: number; connectTimeoutMs: number; statementTimeoutMs: number };
   /** null when REDIS_URL is not set (the normal case). Reserved: no code reads it today. */
   redis: { url: Secret } | null;
   migrations: { mode: MigrateOnStart };
@@ -152,16 +155,39 @@ function dropBlank(raw: RawEnv): Record<string, string> {
   return cleaned;
 }
 
-function describeIssue(issue: z.ZodIssue): string {
+function describeIssue(issue: z.ZodIssue, source: Record<string, string>): string {
   const name = issue.path.join(".") || "(root)";
-  if (issue.code === z.ZodIssueCode.invalid_type && issue.received === "undefined") {
+  // Required environment fields are top-level keys. Do not rely on Zod's optional
+  // reported-input field (which is omitted by default in Zod 4) to identify absence.
+  const key = issue.path.length === 1 ? String(issue.path[0]) : undefined;
+  if (issue.code === "invalid_type" && key !== undefined && source[key] === undefined) {
     return `${name}: is required`;
   }
-  // Never echo the received value: it may be a secret.
-  if (issue.code === z.ZodIssueCode.invalid_enum_value) {
-    return `${name}: must be one of: ${issue.options.join(", ")}`;
+  // Zod 4 reports enum/literal failures as `invalid_value` with a `values` array.
+  // Only disclose the allowed choices, never the rejected value.
+  if (issue.code === "invalid_value" && "values" in issue && Array.isArray(issue.values) && issue.values.every((value) => typeof value === "string")) {
+    return `${name}: must be one of: ${issue.values.join(", ")}`;
   }
   return `${name}: ${issue.message}`;
+}
+
+/**
+ * Best-effort rejection of common PostgreSQL pooler endpoints for LISTEN/NOTIFY. This is a guardrail,
+ * not proof that a server is direct; the deployment owner must supply the provider's direct connection URL.
+ * The URL is never returned in diagnostics because it contains credentials.
+ */
+export function pooledListenerProblem(effectiveUrl: string | undefined, explicit: boolean): string | undefined {
+  if (!explicit) return "REALTIME_DATABASE_URL: set a dedicated direct PostgreSQL endpoint when REALTIME_ENABLED=true";
+  if (!effectiveUrl) return "REALTIME_DATABASE_URL: required when REALTIME_ENABLED=true";
+  try {
+    const url = new URL(effectiveUrl);
+    const pooledHost = /(^|[-.])pooler([-.]|$)/i.test(url.hostname);
+    const pooledPort = url.port === "6432";
+    if (pooledHost || pooledPort) return "REALTIME_DATABASE_URL: must use a direct PostgreSQL endpoint, not a pooled/pooler endpoint";
+  } catch {
+    // The schema reports malformed URLs separately without including secret values.
+  }
+  return undefined;
 }
 
 function parseCorsOrigins(raw: string | undefined, nodeEnv: NodeEnv, problems: string[]): string[] {
@@ -230,7 +256,7 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
   const problems: string[] = [];
 
   const result = envSchema.safeParse(source);
-  if (!result.success) problems.push(...result.error.issues.map(describeIssue));
+  if (!result.success) problems.push(...result.error.issues.map((issue) => describeIssue(issue, source)));
 
   // Legacy boolean TRUST_PROXY from the reference project: parse it correctly, then refuse the
   // dangerous meaning. `false` is accepted (and has no effect); `true` is rejected.
@@ -253,15 +279,26 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     else suggestionsSwitch = parsed;
   }
 
-  let realtimeEnabled = true;
+  let realtimeEnabled = false;
   if (source.REALTIME_ENABLED !== undefined) {
     const parsed = parseEnvBoolean(source.REALTIME_ENABLED);
     if (parsed === undefined) problems.push("REALTIME_ENABLED: must be true or false");
     else realtimeEnabled = parsed;
   }
 
+  let publicRegistrationEnabled: boolean | undefined;
+  if (source.PUBLIC_REGISTRATION_ENABLED !== undefined) {
+    const parsed = parseEnvBoolean(source.PUBLIC_REGISTRATION_ENABLED);
+    if (parsed === undefined) problems.push("PUBLIC_REGISTRATION_ENABLED: must be true or false");
+    else publicRegistrationEnabled = parsed;
+  }
+
   const nodeEnv: NodeEnv = result.success ? (result.data.NODE_ENV ?? "development") : "development";
   const corsOrigins = parseCorsOrigins(source.CORS_ORIGINS, nodeEnv, problems);
+  if (realtimeEnabled) {
+    const realtimeProblem = pooledListenerProblem(source.REALTIME_DATABASE_URL, source.REALTIME_DATABASE_URL !== undefined);
+    if (realtimeProblem) problems.push(realtimeProblem);
+  }
   if (nodeEnv === "production" && source.AI_PROVIDER === "fake") {
     problems.push("AI_PROVIDER: fake is for local use and tests only and is not allowed when NODE_ENV=production");
   }
@@ -282,9 +319,11 @@ export function loadConfig(raw: RawEnv = process.env): AppConfig {
     auth: {
       sessionTtlSeconds: (env.SESSION_TTL_HOURS ?? 24 * 7) * 3600,
       inviteTtlSeconds: (env.INVITE_TTL_HOURS ?? 24 * 7) * 3600,
+      publicRegistrationEnabled: publicRegistrationEnabled ?? nodeEnv !== "production",
     },
     database: {
       url: new Secret(env.DATABASE_URL),
+      realtimeUrl: env.REALTIME_DATABASE_URL ? new Secret(env.REALTIME_DATABASE_URL) : undefined,
       poolMax: env.DB_POOL_MAX ?? 10,
       connectTimeoutMs: env.DB_CONNECT_TIMEOUT_MS ?? 5_000,
       statementTimeoutMs: env.DB_STATEMENT_TIMEOUT_MS ?? 15_000,
@@ -305,6 +344,7 @@ export function describeConfig(config: AppConfig): Record<string, unknown> {
     auth: config.auth,
     database: {
       url: redactUrl(config.database.url.reveal()),
+      realtimeUrl: config.database.realtimeUrl ? redactUrl(config.database.realtimeUrl.reveal()) : null,
       poolMax: config.database.poolMax,
       connectTimeoutMs: config.database.connectTimeoutMs,
       statementTimeoutMs: config.database.statementTimeoutMs,

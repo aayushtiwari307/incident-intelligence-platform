@@ -14,7 +14,7 @@ Run everything from the repository root unless stated otherwise.
 | Node.js 22.12+ | `node -v` | `.nvmrc` pins 22 |
 | npm 10+ | `npm -v` | ships with Node 22 |
 | Docker Desktop, **running** | `docker version` shows a *Server* section | PostgreSQL runs in a container |
-| Free ports | 5434, 3001, 3000 (8080 for the proxy topology) | the containers publish on 127.0.0.1 only |
+| Free ports | 5545, 3001, 3000 (8080 for the proxy topology) | the containers publish on 127.0.0.1 only |
 
 **PowerShell only:** if `npm` fails with "running scripts is disabled on this system", either use `npm.cmd` instead of `npm`,
 or run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
@@ -98,7 +98,7 @@ submit. Two separate switches exist: `AI_PROVIDER` alone controls the older "AI 
 usable provider and the organization opt-in. `AI_DAILY_REQUEST_LIMIT` (default 20) is per organization per UTC day. The real
 OpenAI adapter exists but is UNVERIFIED against the live API; do not enable it on a public deployment.
 
-Optional settings in `apps/api/.env`: `SESSION_TTL_HOURS` (default 168), `INVITE_TTL_HOURS` (default 168), `AI_MODEL`, `AI_TIMEOUT_MS`, `REALTIME_ENABLED` (default true) and `REALTIME_REVALIDATE_SECONDS` (default 10).
+Optional settings in `apps/api/.env`: `SESSION_TTL_HOURS` (default 168), `INVITE_TTL_HOURS` (default 168), `AI_MODEL`, `AI_TIMEOUT_MS`, `REALTIME_ENABLED` (default false) and `REALTIME_REVALIDATE_SECONDS` (default 10).
 
 ## 6. Check health
 
@@ -142,7 +142,7 @@ value from your `.env`:
 
 | CMD | PowerShell |
 |-----|-----------|
-| `set TEST_DATABASE_URL=postgres://platform:YOUR_PASSWORD@127.0.0.1:5434/postgres` | `$env:TEST_DATABASE_URL = "postgres://platform:YOUR_PASSWORD@127.0.0.1:5434/postgres"` |
+| `set TEST_DATABASE_URL=postgres://platform:YOUR_PASSWORD@127.0.0.1:5545/postgres` | `$env:TEST_DATABASE_URL = "postgres://platform:YOUR_PASSWORD@127.0.0.1:5545/postgres"` |
 | `npm run test:integration` | `npm run test:integration` |
 
 ## Run the full production-container stack
@@ -210,7 +210,7 @@ Without the edge proxy use the API address, `http://127.0.0.1:3001`. Optional en
 |---------|-------------|
 | `Invalid environment configuration` listing variables | `apps/api/.env` missing or incomplete: run `npm run setup:env`. Values are never echoed. |
 | `password authentication failed` | root `.env` and `apps/api/.env` passwords differ, or the volume was created with older ones: `npm run services:reset` |
-| `ECONNREFUSED 127.0.0.1:5434` | container not running: `npm run services:up`; start Docker Desktop first |
+| `ECONNREFUSED 127.0.0.1:5545` | container not running: `npm run services:up`; start Docker Desktop first |
 | `migration CHECKSUM_MISMATCH` | an applied migration file was edited. Never edit applied migrations; add a new numbered one. |
 | `LOCK_TIMEOUT` | another API/migrate process is mid-migration; wait or stop it |
 | Port 3001 or 3000 already in use | stop the other process; change `API_PORT` / the web `--port` and `CORS_ORIGINS` together |

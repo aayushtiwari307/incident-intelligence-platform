@@ -1,3 +1,9 @@
+# Current-snapshot re-review (2026-10-24)
+
+Important evidence boundary: this file retains historical M9 verification records. In the current coding session, M9 Jest suites, typecheck, lint, API/web builds and PostgreSQL integrations were **not rerun**; no live AI provider was called. Only `node --test scripts/*.test.mjs` ran in the current tree (62 passed, 0 failed). AI remains disabled by default. See `coding-stage-5-report.md` and the root completion report.
+
+---
+
 # Milestone 9 status: Grounded AI and Safety
 
 **Status: M9 VERIFIED (local verification, 2026-10-18).** The reviewed implementation and its independent-review corrections passed the native checks below. This is not deployment, production, or live-provider evidence. No commit, PR, merge, or deployment was performed.

@@ -5,3 +5,5 @@ export * from "./permissions";
 export * from "./realtime";
 export * from "./integrations";
 export * from "./ai-suggestions";
+
+export * from "./services";

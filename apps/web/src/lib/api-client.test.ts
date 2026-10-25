@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createIntegrationSchema } from "@platform/shared";
 import { ApiError, createApiClient, type FetchLike } from "./api-client";
 
 interface Call {
@@ -144,14 +145,25 @@ describe("api client", () => {
     assert.equal(create.url, "http://api.test/api/organization/integrations");
     assert.equal(create.init?.method, "POST");
     assert.equal(create.init?.credentials, "include");
-    assert.deepEqual(JSON.parse(String(create.init?.body)), { name: "prod alertmanager" });
+    // `kind` is part of the shared contract (default "alertmanager"); the client always sends it explicitly.
+    const createBody = JSON.parse(String(create.init?.body));
+    assert.deepEqual(createBody, { name: "prod alertmanager", kind: "alertmanager" });
+    assert.deepEqual(createIntegrationSchema.parse(createBody), { name: "prod alertmanager", kind: "alertmanager" });
+
+    await api.createIntegration("deploys", "change-events");
+    const changeEvents = s.calls[1] as Call;
+    assert.equal(changeEvents.url, "http://api.test/api/organization/integrations");
+    assert.equal(changeEvents.init?.method, "POST");
+    const changeEventsBody = JSON.parse(String(changeEvents.init?.body));
+    assert.deepEqual(changeEventsBody, { name: "deploys", kind: "change-events" });
+    assert.deepEqual(createIntegrationSchema.parse(changeEventsBody), { name: "deploys", kind: "change-events" });
 
     await api.rotateIntegration("a/b");
-    assert.equal((s.calls[1] as Call).url, "http://api.test/api/organization/integrations/a%2Fb/rotate");
-    assert.equal((s.calls[1] as Call).init?.method, "POST");
+    assert.equal((s.calls[2] as Call).url, "http://api.test/api/organization/integrations/a%2Fb/rotate");
+    assert.equal((s.calls[2] as Call).init?.method, "POST");
     await api.revokeIntegration("a/b");
-    assert.equal((s.calls[2] as Call).url, "http://api.test/api/organization/integrations/a%2Fb");
-    assert.equal((s.calls[2] as Call).init?.method, "DELETE");
+    assert.equal((s.calls[3] as Call).url, "http://api.test/api/organization/integrations/a%2Fb");
+    assert.equal((s.calls[3] as Call).init?.method, "DELETE");
     for (const call of s.calls) assert.ok(!String(call.init?.body ?? "").includes("organization"));
   });
 
@@ -183,5 +195,25 @@ describe("api client", () => {
     assert.equal(s.calls[2]?.init?.body, JSON.stringify({ target: "comment" }));
     assert.equal(s.calls[5]?.init?.body, JSON.stringify({ suggestionsEnabled: true }));
     assert.ok(!s.calls.some((c) => String(c.init?.body ?? "").includes("organization")));
+  });
+});
+
+describe("registration policy", () => {
+  it("reads the public policy with a GET, no body and no organization id", async () => {
+    const s = stub(200, { publicRegistration: false });
+    const policy = await createApiClient("", s.fetch).registrationPolicy();
+    // Under jest-environment-node, Response.json() returns objects from the outer Node realm, so their prototype is not this
+    // sandbox's Object.prototype and strict deep equality fails even though keys and values match. Copy the own enumerable
+    // properties into a sandbox-realm object: keys and values are still compared strictly (an extra or missing key still fails).
+    assert.deepEqual({ ...policy }, { publicRegistration: false });
+    const call = s.calls[0] as Call;
+    assert.equal(call.url, "/api/auth/registration-policy");
+    assert.equal(call.init?.method, "GET");
+    assert.equal(call.init?.body, undefined);
+  });
+
+  it("surfaces a failed policy request as an ApiError so the page can fall back to the form", async () => {
+    const s = stub(503, { error: { code: "UNAVAILABLE", message: "down" } });
+    await assert.rejects(createApiClient("", s.fetch).registrationPolicy(), ApiError);
   });
 });

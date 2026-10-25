@@ -83,6 +83,11 @@ export class ApiHandlers {
 
   // ---- auth ---------------------------------------------------------------------------------------------------
 
+  /** Public, read-only hint for the registration page; the POST route remains the enforcement point. */
+  registrationPolicy(): HttpResult {
+    return ok({ publicRegistration: this.options.publicRegistrationEnabled !== false });
+  }
+
   async register(req: HttpRequest): Promise<HttpResult> {
     this.checkOrigin(req);
     const result = await this.auth.register(req.body, { ip: req.ip });

@@ -1,3 +1,11 @@
+# Current decision status (2026-10-24)
+
+AI remains disabled by default in the current source. No Gemini adapter or live provider request was added during closeout: the provider adapter is not implemented in this snapshot, and data-use/training terms were not verified for a new free provider. The `gemini` config label therefore yields a disabled reason, not an operational provider. Fake/mock tests and historical OpenAI-adapter unit coverage are not live-provider evidence.
+
+The remainder of this ADR is retained as the original M9 design/verification record and should be read with the current-snapshot evidence boundary in `../verification/milestone-9-status.md`.
+
+---
+
 # 0019. Grounded AI suggestions (Milestone 9)
 
 Status: implemented in source 2026-10-18; **not accepted**. Testing deferred (see `docs/verification/milestone-9-status.md`).

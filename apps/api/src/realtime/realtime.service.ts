@@ -58,5 +58,12 @@ export class RealtimeService implements OnApplicationBootstrap, BeforeApplicatio
   }
 }
 
-export const defaultListenConnector = (config: AppConfig): ConnectListen =>
-  createPgListenConnector(config.database.url.reveal(), config.database.connectTimeoutMs);
+export const defaultListenConnector = (config: AppConfig): ConnectListen => {
+  // Keep provider construction safe when realtime is disabled. The check happens only if a caller actually
+  // attempts to connect, and never falls back to the ordinary query pool URL.
+  return async () => {
+    const directUrl = config.database.realtimeUrl;
+    if (!directUrl) throw new Error("REALTIME_DATABASE_URL is required for the real-time listener");
+    return createPgListenConnector(directUrl.reveal(), config.database.connectTimeoutMs)();
+  };
+};

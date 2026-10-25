@@ -61,6 +61,7 @@ describe("AlertIngestionService", () => {
         severity: "sev3",
         title: "Test alert",
         description: "",
+        serviceName: null,
       }],
     };
 

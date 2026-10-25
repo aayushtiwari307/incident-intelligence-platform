@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { CreatedIntegrationDto, IntegrationDto } from "@platform/shared";
+import type { CreatedIntegrationDto, IntegrationDto, IntegrationKind } from "@platform/shared";
 import { Field, FormError } from "./ui";
 import { errorText, relativeTime } from "../lib/format";
 import { api } from "../lib/session";
@@ -16,7 +16,7 @@ import { api } from "../lib/session";
 export function IntegrationsPanel() {
   const [items, setItems] = useState<IntegrationDto[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState<{ token: string; name: string; action: "created" | "rotated" } | null>(null);
+  const [revealed, setRevealed] = useState<{ token: string; name: string; kind: IntegrationKind; action: "created" | "rotated" } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
@@ -32,7 +32,7 @@ export function IntegrationsPanel() {
   }, [load]);
 
   function reveal(result: CreatedIntegrationDto, action: "created" | "rotated") {
-    setRevealed({ token: result.token, name: result.name, action });
+    setRevealed({ token: result.token, name: result.name, kind: result.kind, action });
     setCopied(false);
   }
 
@@ -41,7 +41,8 @@ export function IntegrationsPanel() {
     const form = event.currentTarget;
     setError(null);
     try {
-      reveal(await api.createIntegration(String(new FormData(form).get("name")).trim()), "created");
+      const formData = new FormData(form);
+      reveal(await api.createIntegration(String(formData.get("name")).trim(), String(formData.get("kind")) as IntegrationKind), "created");
       form.reset();
       await load();
     } catch (e) {
@@ -71,16 +72,22 @@ export function IntegrationsPanel() {
 
   return (
     <section aria-labelledby="integrations-h">
-      <h2 id="integrations-h">Alert integrations</h2>
+      <h2 id="integrations-h">Integrations</h2>
       <p className="muted">
-        Let Prometheus Alertmanager create and resolve incidents in this organization. Each integration has its own secret token; send it as a Bearer token to{" "}
-        <code>/api/v1/integrations/alertmanager</code>. Setup guide: <code>docs/integrations/alertmanager.md</code>.
+        Create a separate credential for each sender. Alertmanager credentials go to <code>/api/v1/integrations/alertmanager</code>; deployment/change senders go to{" "}
+        <code>/api/v1/integrations/changes</code>. Send each token as a Bearer token. Change payloads are documented in <code>docs/integrations/change-events.md</code>.
       </p>
       <FormError message={error} />
 
       <form className="card inline" onSubmit={create} aria-label="Create an integration">
         <Field label="Name" htmlFor="integration-name">
           <input id="integration-name" name="name" required maxLength={60} autoComplete="off" placeholder="prod-alertmanager" />
+        </Field>
+        <Field label="Integration type" htmlFor="integration-kind">
+          <select id="integration-kind" name="kind" defaultValue="alertmanager">
+            <option value="alertmanager">Alertmanager</option>
+            <option value="change-events">Deployments / change events</option>
+          </select>
         </Field>
         <button type="submit" className="btn">
           Create integration
@@ -90,7 +97,7 @@ export function IntegrationsPanel() {
       {revealed ? (
         <div className="card" role="status" data-testid="integration-secret">
           <p>
-            <strong>{revealed.action === "created" ? "Integration created" : "Secret rotated"}: {revealed.name}.</strong> Copy this token now. It is shown only
+            <strong>{revealed.action === "created" ? "Integration created" : "Secret rotated"}: {revealed.name} ({revealed.kind}).</strong> Copy this token now. It is shown only
             once and <strong>cannot be retrieved later</strong>; if you lose it, rotate the secret to get a new one.
             {revealed.action === "rotated" ? " The previous token no longer works." : ""}
           </p>
@@ -110,10 +117,11 @@ export function IntegrationsPanel() {
         <p className="muted">No integrations yet.</p>
       ) : (
         <table className="table">
-          <caption className="visually-hidden">Alert integrations</caption>
+          <caption className="visually-hidden">Organization integrations</caption>
           <thead>
             <tr>
               <th scope="col">Name</th>
+              <th scope="col">Type</th>
               <th scope="col">Status</th>
               <th scope="col">Last used</th>
               <th scope="col">Created</th>
@@ -126,6 +134,7 @@ export function IntegrationsPanel() {
             {items.map((i) => (
               <tr key={i.id}>
                 <td>{i.name}</td>
+                <td>{i.kind === "alertmanager" ? "Alertmanager" : "Change events"}</td>
                 <td>{i.status === "active" ? "Active" : `Revoked ${i.revokedAt ? relativeTime(i.revokedAt) : ""}`}</td>
                 <td>{i.lastUsedAt ? relativeTime(i.lastUsedAt) : "Never"}</td>
                 <td>
