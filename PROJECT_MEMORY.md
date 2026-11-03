@@ -2,21 +2,37 @@
 
 **Purpose:** Durable handoff across Claude/GPT chats. The current source ZIP is the source of truth for code; actual command output is the source of truth for verification. This file is context, not proof that a feature works.
 
-**Last updated:** 2026-10-24, after fresh local verification of the current worktree. Historical milestone statements below retain their original evidence scope; live AI-provider behavior remains unverified.
+**Last updated:** 2026-11-02. Historical milestone statements below retain their original dates and evidence scope. Current claims below distinguish source implementation, automated verification and live-runtime evidence.
 
-**Update 2026-10-14 (Milestone 5 implemented, NOT accepted).** M4 was merged by the maintainer and its lockfile now contains `socket.io`/`socket.io-client` (maintainer-reported). M5 (production readiness and runtime verification) is implemented in this source and is **unaccepted**: Jest, `npm ci`, `npm audit`, ESLint, `next build`, every Docker run, CI and the manual two-window browser check were **not run** in the authoring sandbox (registry and Docker Hub blocked). See `docs/verification/milestone-5-status.md` (evidence classes, test accounting, results), `docs/decisions/0017-production-readiness-and-runtime-verification.md` and `docs/security/npm-audit-m5.md`. M5 changes: optional `REDIS_URL`; `ioredis` and the Compose Redis service removed (nothing used them); `smoke:stack` gained six WebSocket checks (run in CI, with a negative control); optional single-origin Caddy proxy topology (`docker-compose.edge.yml`, `deploy/edge/Caddyfile`); `TRUST_PROXY_HOPS` integration tests; login/register verify the session via `/api/auth/me`. Older text below is kept as history; where it says Redis is provisioned, the lockfile is not regenerated, or the smoke test has no WebSocket check, that is superseded by this paragraph.
+**Historical 2026-10-14 note:** M5 was then recorded as implemented and unaccepted because the original runtime/CI/acceptance evidence had not been completed. That wording describes the 2026-10-14 evidence snapshot, not the current project status. M5 is now considered complete among M1–M5; see the current state below and preserve the original ledger for provenance.
 
-## Current verified state (2026-10-24)
+## Current status (2026-11-02)
 
-- **Milestones 1–5:** historical status is not uniform: M2.1 and M3 have explicit accepted records; M4 is described as merged, while retained M4 notes still list verification as pending; the primary M5 evidence ledger explicitly says implemented and NOT ACCEPTED. Do not turn this mixed record into a blanket claim that every milestone M1–M5 was accepted.
-- **M6 free deployment:** deployment is COMPLETE. Render Free + Neon is live; the README and deployment record document HTTP 200 for `/`, `/health/live`, and `/health/ready`. Backup/restore and registration policy remain pending. Keep production migration-ledger evidence distinct from local disposable-database checks.
-- **M7:** merged and included in the deployed application. A real external Alertmanager deployment remains untested, and rate limiting is in-memory per process. See `docs/verification/milestone-7-status.md`.
-- **M8 implementation:** source covers migrations 0008–0011, tenant-scoped resolutions and search documents, resolution and similar-incidents APIs, incident-detail UI, and retrieval evaluation. These migrations are existing M8 work; do not edit them as part of closeout.
-- **M8 automated closeout checks:** focused real-PostgreSQL resolution/similar/HTTP authorization integration tests passed (4 suites, 24 tests); web Jest passed (6 suites, 61 tests); API and web typechecks, shared build, repository ESLint, and web production build passed. The evaluation report records two byte-identical confirmatory runs. This closeout did not rerun every workspace/API test.
-- **M8 browser/runtime:** local browser smoke used an isolated disposable PostgreSQL cluster and normal registration/authentication. It verified incident detail, empty/populated similar panels, linked candidates, request-error/retry, optional blank resolution, saved resolution display, and recovery after a simulated stale-version status-transition response. API GET confirmed persisted resolution version 1. Realtime was disabled for this smoke, so WebSocket connections returned 404/reconnected; realtime behavior was not verified here.
-- **M8 retrieval gate:** fresh 32-record/eight-scenario synthetic corpus; each query searched all 31 other records. Weighted English Recall@5 0.8229 vs weighted simple 0.6042, improvement +0.2188, meeting the unchanged +0.10 point-estimate criterion. Paired scenario-bootstrap 95% interval is [+0.0938, +0.3438]; its lower bound is below +0.10, so the interval does not establish that the improvement exceeds the margin at 95% confidence. This is single-author synthetic evidence, not human-annotated or production validation. See `docs/verification/m8-confirmatory-evaluation.md`; the distinct protocol-corrected 48-record evaluation remains separately qualified in `docs/verification/m8-search-config-evaluation.md`.
-- **M9:** implemented/merged and freshly locally verified on 2026-10-24. Typecheck, ESLint, 445 unit tests, 257 PostgreSQL integration tests, API build, and Next.js build passed on the current worktree using an isolated loopback-only PostgreSQL container. The earlier migration CLI check verified 0001–0012 on a separate disposable database; do not present that as proof of the production migration ledger. No live provider request was made; deployed AI remains disabled. See `docs/verification/milestone-9-status.md`.
-- **Release evidence:** no deployment, production proof, commit, PR, or merge was performed for M8 during closeout. M8 has an implementation and focused verification, not production validation.
+- **M1–M5:** complete. M5 should not be described with the obsolete blanket “implemented, NOT accepted”; historical dated notes may retain that original status label for evidence provenance.
+- **M6 free deployment:** deployed on Render Free + Neon. Live health/landing evidence and deployment records remain the applicable historical live evidence; later health rechecks are still pending.
+- **M7 Alertmanager:** implementation is complete and merged. On 2026-10-26, the Alertmanager endpoint passed 8 synthetic live scenarios. An actual external Alertmanager sender was not tested, so that live path remains unverified.
+- **M8 similar incident retrieval:** implemented without AI, including tenant-scoped resolution/search behavior and incident-detail integration. Automated and local verification is recorded; no claim of production-validation completeness should be inferred beyond that evidence.
+- **M9 grounded AI:** implemented and locally tested with a mock provider. AI remains disabled on the public deployment, and no live AI-provider request should be claimed.
+- **GitHub issue/PR enrichment:** implementation is complete. Successful live retrieval is unverified; the previous live attempt returned `rate_limited`, so do not present it as completed live evidence.
+- **M10 service catalog and change correlation:** implemented. All 14 migrations, including `0013_github_issue_enrichment.sql` and `0014_service_change_context.sql`, were confirmed applied on 2026-10-26. One live change event was accepted under ID `f7441240-6bec-488e-8490-9203495824f2`; subsequent retries returned `401`. Service-link persistence and visible change-event correlation remain unverified.
+- **Previously reported final-tree verification:** CI green, 537 unit tests, 271 integration tests, smoke 20/20, and zero audit vulnerabilities. Treat these as reported verification results and do not infer unlisted live-runtime coverage.
+- **Previously reported live page loading:** login, Services and GitHub pages loaded successfully in prior runtime evidence. Live health endpoints and targeted Services/GitHub workflows have not been freshly rechecked in this review.
+- **Realtime:** source/automated verification is present, but two-browser deployed verification remains pending. It requires a separate direct `REALTIME_DATABASE_URL` and explicit owner approval.
+- **Control Room redesign:** six screens are designed in Claude Canvas, but implementation and redesign verification are incomplete. Register/invite and incident create/edit designs remain outstanding.
+
+## Remaining work
+
+1. Confirm service-link persistence and complete change-event correlation.
+2. Obtain successful live GitHub retrieval evidence.
+3. Recheck live health endpoints and targeted Services/GitHub workflows.
+4. Complete two-browser realtime verification only with a direct `REALTIME_DATABASE_URL` and owner approval.
+5. Perform the backup/restore drill only on disposable local PostgreSQL.
+6. Run an actual external Alertmanager sender test.
+7. Add README screenshots and the live URL; choose the project name and license, and add a root LICENSE while preserving upstream `julmtoz` attribution.
+8. Implement Gemini only after reviewing free-tier data-use terms; keep public-demo AI disabled.
+9. Complete the Control Room UI redesign. Three related screen designs are still outstanding: register/invite and incident create/edit.
+
+**Release evidence:** implemented milestones and focused automated/runtime evidence are not the same as overall production acceptance. Claims should remain limited to the evidence cited above.
 
 ## 1. Mission and non-negotiable quality rule
 
@@ -36,7 +52,7 @@ Reference: `julmtoz/ai-incident-intelligence`.
 
 Observed reference strengths: live Railway deployment, CI evidence, GitHub issue enrichment, a smaller surface known to run. Observed weaknesses include no authentication/tenancy and a database-write-then-Redis-enqueue dual write/startup recovery sweep; AI was mandatory and analysis wrote back to the incident. Compare source, not marketing/README alone.
 
-Our product has implemented authentication, organizations/roles/invitations, tenant isolation, audited incident lifecycle, optimistic concurrency, PostgreSQL constraints/triggers, a durable PostgreSQL queue with leases/fencing, and the Milestone 3 Docker/CI workflows. Milestone 3 Windows tests, browser workflow and GitHub Actions green status were confirmed by the user on 2026-10-13. Overall superiority is still **not proven**: live AI-provider calls and GitHub issue enrichment remain unverified; deployed real-time delivery still needs two-browser acceptance evidence.
+Our product has implemented authentication, organizations/roles/invitations, tenant isolation, audited incident lifecycle, optimistic concurrency, PostgreSQL constraints/triggers, a durable PostgreSQL queue with leases/fencing, and the Milestone 3 Docker/CI workflows. Milestone 3 Windows tests, browser workflow and GitHub Actions green status were confirmed by the user on 2026-10-13. Overall superiority is still **not proven**: live AI-provider calls and successful live GitHub retrieval remain unverified; deployed real-time delivery still needs two-browser acceptance evidence, and M10 service/change correlation also needs final live persistence verification.
 
 ## 4. Accepted Windows-verified baseline: Milestone 2.1
 

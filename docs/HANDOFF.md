@@ -1,15 +1,32 @@
-# Portable handoff — Incident Intelligence Platform (2026-10-14)
+# Portable handoff — Incident Intelligence Platform
 
 Read `PROJECT_MEMORY.md` first, then inspect source. Actual command output and GitHub/browser evidence outrank stale notes. Never claim an unrun check passed; never weaken tests; preserve upstream MIT attribution, security invariants and applied migrations. Do not package `.env`, `node_modules`, generated build output or `.git`.
 
-## Current closeout state (2026-10-24)
+## Current closeout state (2026-11-02)
 
-- M6 deployment is COMPLETE: the Render Free + Neon demo is live, and the README/deployment record documents HTTP 200 for `/`, `/health/live`, and `/health/ready`. M6 closeout still requires a backup/restore drill and a registration-policy decision. M7 is merged and included in the deployed app; a real external Alertmanager deployment remains untested.
-- M8 implementation includes migrations 0008–0011, resolution and similar-incidents APIs, incident-detail UI, and search evaluation. Focused closeout checks passed: four real-PostgreSQL API/HTTP integration suites (24 tests), web Jest (6 suites/61 tests), API/web typechecks, shared build, repository lint, and web production build. This was not a rerun of every workspace test suite.
-- Browser smoke exercised authenticated incident detail, empty and populated similar results, candidate navigation, an injected request error and retry, optional blank resolution, persisted resolution display, and recovery after an injected status-transition version conflict. This was on a local disposable database; realtime was disabled, so WebSocket behavior is explicitly unverified.
-- Fresh confirmatory retrieval evaluation: weighted English Recall@5 0.8229 vs weighted simple 0.6042 (+0.2188), meeting the predeclared +0.10 point-estimate gate. The paired scenario-bootstrap interval [+0.0938, +0.3438] has a lower bound below +0.10. Results use a single-author synthetic corpus, not human labels or production data; two recorded runs were byte-identical. See `verification/m8-confirmatory-evaluation.md`. The earlier protocol-corrected corpus report is separate.
-- M9 grounded AI is implemented/merged and freshly locally verified on 2026-10-24: typecheck, ESLint, 445 unit tests, 257 isolated-PostgreSQL integration tests, API build, and Next.js build passed. No live provider request was made; deployed AI remains disabled. The prior migration CLI check covered 0001–0012 on a disposable database, not independently verified production-ledger state. See `verification/milestone-9-status.md`.
-- M1–M4 implementation is complete. M5 real-time acceptance remains open: real-time is disabled in deployment and a two-browser live update has not been verified. Treat older milestone notes below as historical wherever they conflict with the current closeout state.
+- M1–M10 implementation is substantially complete; M1–M5 are complete. Historical unaccepted/implementation-only labels are preserved below only where they date original evidence.
+- M6: deployed on Render Free + Neon. A future live check must recheck landing and health endpoints rather than treating older 200 responses as current proof.
+- M7: Alertmanager implementation is merged. On 2026-10-26, its endpoint passed 8 synthetic live scenarios. An actual external Alertmanager sender remains unverified.
+- M8: similar incident retrieval is implemented without AI. Preserve historical retrieval, integration and browser evidence; do not claim production or live workflow completeness beyond recorded evidence.
+- M9: grounded AI is implemented and was tested with a mock provider. AI remains disabled on the public deployment; no live AI-provider request is verified.
+- GitHub issue/PR enrichment is implemented. Live successful retrieval is unverified; the prior live attempt returned `rate_limited`.
+- M10: service catalog and change-event correlation are implemented. On 2026-10-26, all 14 migrations—including `0013_github_issue_enrichment.sql` and `0014_service_change_context.sql`—were confirmed applied. One live change event was accepted under ID `f7441240-6bec-488e-8490-9203495824f2`, but subsequent retries returned `401`. Service-link persistence and visible correlation remain unverified.
+- Previously reported final-tree verification: CI green, 537 unit tests, 271 integration tests, smoke 20/20, and zero audit vulnerabilities. These are reported results, not evidence for any unlisted live workflow.
+- Previously reported live page loading: login, Services and GitHub pages loaded successfully. Live health endpoints and targeted Services/GitHub workflows still need fresh rechecking.
+- Realtime remains disabled on the public deployment. Two-browser live verification requires a separate direct `REALTIME_DATABASE_URL` and explicit owner approval.
+- Backup/restore requires a drill on disposable local PostgreSQL only.
+
+## Remaining work
+
+1. Confirm service-link persistence and complete change-event correlation.
+2. Obtain successful live GitHub retrieval evidence.
+3. Recheck live health endpoints and targeted Services/GitHub workflows.
+4. Complete actual two-browser realtime verification only after direct database wiring and owner approval.
+5. Perform the local disposable-PostgreSQL backup/restore drill.
+6. Test the actual external Alertmanager sender.
+7. Add README screenshots and the live URL; choose the project name and license; add a root LICENSE while preserving upstream `julmtoz` attribution.
+8. Review free-tier Gemini data-use terms before implementation; keep public-demo AI disabled.
+9. Complete the Control Room redesign. Six screens are designed in Claude Canvas; register/invite and incident create/edit designs remain outstanding, and no redesign implementation is verified.
 
 ## Current source and status
 - **Accepted Milestone 2.1:** `incident-platform-milestone2.1-windows-verified.zip` (fallback baseline).

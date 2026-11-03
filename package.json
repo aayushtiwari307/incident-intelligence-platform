@@ -1,8 +1,8 @@
 {
-  "name": "incident-platform",
+  "name": "incident-intelligence-platform",
   "version": "0.0.0",
   "private": true,
-  "description": "Real-time incident operations platform. Working title: see docs/decisions/0003-product-name.md",
+  "description": "Incident Intelligence Platform for ingesting alerts and managing incident response.",
   "engines": {
     "node": ">=22.12.0"
   },

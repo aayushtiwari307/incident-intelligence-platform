@@ -18,7 +18,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 [Features](#-features) · [Architecture](#-architecture) · [Quick start](#-quick-start) · [Evidence](#-what-is-verified-and-what-is-not) · [Docs](#-documentation-map)
 
 <!-- Add a hero screenshot or GIF here, e.g. docs/assets/incident-detail.png -->
-<!-- Add your live demo link here once the M10 build is redeployed -->
+**Live demo:** https://incident-intelligence-free-demo.onrender.com
 
 </div>
 
@@ -26,10 +26,10 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 
 ## 📌 Status at a glance
 
-> **Code-complete through Milestone 10 and fully verified locally** (2026-10-25, commit `d89f800`): CI green, 537 unit tests,
-> 271 real-PostgreSQL integration tests, a 20/20 container smoke test and a clean dependency audit. The public demo still runs the
-> M1–M9 build on Render Free + Neon; GitHub enrichment and M10 service/change context are merged but **not yet deployed**.
-> The [evidence table](#-what-is-verified-and-what-is-not) below says exactly what is proven and what is not.
+> **Code-complete through Milestone 10 and substantially verified across local and live checks** (2026-11-02): CI green,
+> 537 unit tests, 271 real-PostgreSQL integration tests and a 20/20 container smoke test. Migrations `0013` and `0014` are
+> deployed to the public Render Free + Neon demo. GitHub enrichment is associated and reachable, while successful live detail
+> retrieval remains unverified; M10 change-event ingestion has live persistence evidence, including a service-linked event visible in Incident #3 after refresh.
 
 ---
 
@@ -154,16 +154,16 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 |---|---|---|
 | Whole platform M1–M10 | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build | ✅ Verified locally |
 | Container stack | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout | ✅ Verified locally |
-| Demo deployment | Render Free + Neon, `/`, `/health/live`, `/health/ready` returned HTTP 200 on 2026-10-24 (M1–M9 build) | 🟡 Live, but migrations `0013`/`0014` are not yet applied there |
+| Demo deployment | Render Free + Neon deployment at https://incident-intelligence-free-demo.onrender.com; `/`, `/health/live`, `/health/ready` and the Login, Services and GitHub workflows loaded successfully | 🟡 Live runtime verified previously; migrations `0013`/`0014` are deployed |
 | Continuous integration | Latest run on `main` is green, including the PR #7 merge | ✅ Passing |
 | Dependency audit | `npm audit` reported **0 vulnerabilities** on the final tree (547 packages) | ✅ Clean on 2026-10-25 |
-| GitHub enrichment (0013) | Mocked-network unit tests plus a real-PostgreSQL tenant-boundary test, all passing | 🟡 Tested locally, **no live GitHub call yet** |
-| Service and change context (0014) | Real-PostgreSQL integration suite passing within the 271 tests | ✅ Verified locally, not yet deployed |
+| GitHub enrichment (0013) | Repository/PR association and API/UI paths are implemented and tested; live detail retrieval was attempted and returned `rate_limited` | 🟡 Successful live issue/PR detail retrieval is unverified |
+| Service and change context (0014) | Live change event `live-check-001` (ID `f7441240-6bec-488e-8490-9203495824f2`) appeared in Incident #3's service/change context. The service association and event details remained visible after page refresh, verifying live service-link persistence; correlation is contextual evidence only, and causation is **NOT** proven | ✅ Live service-link persistence verified |
 | Registration policy | Invite-only default in production, covered by code and tests | 🟡 Not yet checked on the live Render service |
 | Real-time | Integration tests plus the container smoke test (auth, delivery, tenant isolation, logout) | 🟡 Verified locally; off on the demo, **two-browser acceptance on the live URL not done** |
-| Alertmanager intake | Integration tests and a local simulator | ⬜ Never tested against a real Alertmanager |
-| Grounded AI | Tested with fake providers and an OpenAI adapter's unit tests | ⬜ **No live provider call has ever been made**; AI is off on the demo |
-| Backup / restore | Guarded scripts with unit tests | ⬜ Drill not yet performed |
+| Alertmanager intake | Integration tests and 8 synthetic live scenarios passed on 2026-10-26; an actual external Alertmanager sender remains unverified | 🟡 Synthetic live verification passed; external sender not verified |
+| Grounded AI | Tested with fake providers and an OpenAI adapter's unit tests | 🟡 Tested locally with a mock; **no live provider call has been made**; AI is off on the public demo |
+| Backup / restore | Guarded scripts and focused safety tests; a disposable local PostgreSQL backup/restore verification passed on 2026-11-02 | ✅ Verified locally, not a production restore drill |
 
 **Retrieval quality (M8).** On a *synthetic, single-author* corpus of 32 resolved incidents, weighted English full-text search
 scored Recall@5 **0.82** against **0.60** for a plain full-text baseline (+0.22; paired bootstrap interval +0.09 to +0.34).
@@ -226,11 +226,12 @@ is more hands-off than the manual linking here.
 - [x] M9: grounded AI and safety
 - [x] GitHub issue enrichment
 - [x] M10: service catalog and change context
-- [ ] Apply migrations `0013`/`0014` to the hosted database and redeploy
 - [x] Full-tree verification on `main` (2026-10-25)
+- [x] Disposable local PostgreSQL backup/restore verification (2026-11-02)
 - [ ] Two-browser real-time acceptance on the deployed URL
-- [ ] Backup / restore drill, live GitHub test, real Alertmanager test
-- [ ] Decide whether the demo gets a free AI provider or stays AI-free
+- [ ] Successful live GitHub issue/PR detail retrieval
+- [ ] Live external Alertmanager sender test
+- [ ] Public-demo AI remains disabled; a Gemini adapter and provider terms review are pending
 
 ---
 
