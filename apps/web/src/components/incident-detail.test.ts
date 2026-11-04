@@ -60,7 +60,8 @@ describe("incident detail UI", () => {
     const empty = renderToStaticMarkup(
       createElement(SimilarIncidentsContent, { state: { status: "loaded", results: [] }, onRetry: () => undefined }),
     );
-    assert.match(empty, /No similar resolved incidents found/);
+    assert.match(empty, /Nothing similar yet/);
+    assert.match(empty, /Resolved incidents with a recorded fix appear here/);
 
     const failed = renderToStaticMarkup(
       createElement(SimilarIncidentsContent, {
@@ -81,11 +82,12 @@ describe("incident detail UI", () => {
       }),
     );
     assert.equal((markup.match(/Related outage/g) ?? []).length, 5);
-    assert.match(markup, /#1/);
+    assert.match(markup, /INC-0001/);
     assert.match(markup, /Root cause/);
     assert.match(markup, /Database connection pool exhausted/);
     assert.match(markup, /Fix applied/);
-    assert.match(markup, /Matched terms:<\/strong> database, pool/);
+    assert.match(markup, /Matched terms:/);
+    assert.match(markup, /<span class="chip plain tiny">database<\/span><span class="chip plain tiny">pool<\/span>/);
     assert.match(markup, /SEV2/);
   });
 

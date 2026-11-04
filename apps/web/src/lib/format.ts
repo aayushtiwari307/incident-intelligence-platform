@@ -10,10 +10,22 @@ export const STATUS_LABEL: Record<IncidentStatus, string> = {
 
 export const SEVERITY_LABEL: Record<IncidentSeverity, string> = {
   sev1: "SEV1 · Critical",
-  sev2: "SEV2 · Major",
-  sev3: "SEV3 · Minor",
+  sev2: "SEV2 · High",
+  sev3: "SEV3 · Medium",
   sev4: "SEV4 · Low",
 };
+
+/** "INC-0007": the stable, readable reference for an incident number. */
+export const incidentRef = (number: number): string => `INC-${String(number).padStart(4, "0")}`;
+
+/** Up to two initials for an avatar. Never throws on odd names. */
+export function initials(name: string | null | undefined): string {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = Array.from(parts[0] ?? "")[0] ?? "";
+  const last = parts.length > 1 ? (Array.from(parts[parts.length - 1] ?? "")[0] ?? "") : "";
+  return (first + last).toUpperCase() || "?";
+}
 
 export const ROLE_LABEL: Record<OrgRole, string> = { owner: "Owner", admin: "Admin", responder: "Responder", viewer: "Viewer" };
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { AiApplyTarget, AiCitationDto, AiDraftDto, AiSuggestionDto, AiSuggestionStateDto, AiUnavailableReason, IncidentDto } from "@platform/shared";
 import { ApiError } from "../lib/api-client";
-import { SEVERITY_LABEL, errorText, relativeTime } from "../lib/format";
+import { SEVERITY_LABEL, errorText, incidentRef, relativeTime } from "../lib/format";
 import { api } from "../lib/session";
 import { useCan } from "./shell";
 
@@ -12,7 +12,7 @@ const POLL_MS = 2500;
 
 export const UNAVAILABLE_TEXT: Record<AiUnavailableReason, string> = {
   server_disabled: "AI suggestions are not enabled on this server.",
-  org_not_opted_in: "AI suggestions are turned off for your organization. An owner or admin can turn them on in Team settings.",
+  org_not_opted_in: "Off for this organization. Suggestions are drafts that always need a person to review them. An owner or admin can turn them on under Team.",
   quota_exhausted: "Your organization has used today's AI suggestion allowance. It resets at 00:00 UTC.",
 };
 
@@ -27,14 +27,14 @@ const FAILURE_TEXT: Record<string, string> = {
 function Citations({ citations, sources }: { citations: AiCitationDto[]; sources: AiSuggestionDto["sources"] }) {
   if (citations.length === 0) return null;
   return (
-    <ul className="plain muted" aria-label="Sources">
+    <ul className="plain cite" aria-label="Sources">
       {citations.map((c, i) => {
         const source = sources[c.incidentId];
         return (
           <li key={i}>
             {source ? (
               <Link href={`/incidents/${encodeURIComponent(c.incidentId)}`}>
-                #{source.number} {source.title}
+                {incidentRef(source.number)} {source.title}
               </Link>
             ) : (
               <span>Incident no longer available</span>
@@ -67,7 +67,7 @@ function SuggestionBody({ s, incident, canUse, busy, onApply, onDismiss }: {
   if (!content) return null;
   const reviewable = s.status === "pending" || s.status === "applied";
   return (
-    <div data-testid="ai-suggestion">
+    <div data-testid="ai-suggestion" className="ai-block">
       <p className="muted">
         <strong>AI-generated, verify before use.</strong> Quotes show where the text came from; they do not prove the claim is true.
         {s.status === "applied" ? " Draft created (nothing was saved to the incident)." : ""}
@@ -107,7 +107,7 @@ function SuggestionBody({ s, incident, canUse, busy, onApply, onDismiss }: {
                 <li key={r.incidentId}>
                   {source ? (
                     <Link href={`/incidents/${encodeURIComponent(r.incidentId)}`}>
-                      #{source.number} {source.title}
+                      {incidentRef(source.number)} {source.title}
                     </Link>
                   ) : (
                     "Incident no longer available"
@@ -120,7 +120,7 @@ function SuggestionBody({ s, incident, canUse, busy, onApply, onDismiss }: {
         </>
       ) : null}
       {canUse && reviewable ? (
-        <div className="actions">
+        <div className="actions" style={{ marginTop: 14 }}>
           {content.severity && content.severity.value !== incident.severity ? (
             <button type="button" className="btn secondary" disabled={busy} onClick={() => onApply("severity")}>
               Use severity as draft
@@ -138,7 +138,7 @@ function SuggestionBody({ s, incident, canUse, busy, onApply, onDismiss }: {
           ) : null}
         </div>
       ) : null}
-      <p className="muted">
+      <p className="muted mono" style={{ fontSize: 11, marginTop: 14 }}>
         Model {s.model ?? "unknown"} · {relativeTime(s.createdAt)}
       </p>
     </div>
@@ -160,9 +160,9 @@ export function AiSuggestionsView({ state, incident, canUse, busy, error, onRequ
   const inFlight = items.some((item) => item.status === "queued" || item.status === "running");
   const settings = state?.settings;
   return (
-    <section aria-labelledby="ai-sug-h" className="card">
-      <h2 id="ai-sug-h" style={{ marginTop: 0 }}>
-        AI suggestions <span className="badge">Draft only</span>
+    <section aria-labelledby="ai-sug-h" className="panel">
+      <h2 id="ai-sug-h" className="label">
+        AI suggestions <span className="chip plain tiny">Draft only</span>
       </h2>
       <div role="alert" className="form-error">
         {error}
@@ -177,7 +177,7 @@ export function AiSuggestionsView({ state, incident, canUse, busy, error, onRequ
       {items.length > 0 ? (
         <div className="ai-suggestions-history">
           {items.map((item) => (
-            <div className="ai-suggestion-history-item" key={item.id}>
+            <div className="ai-item" key={item.id}>
               <SuggestionBody
                 s={item}
                 incident={incident}

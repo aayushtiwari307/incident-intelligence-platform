@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { AuthLayout } from "../../components/auth-layout";
 import { Field, FormError } from "../../components/ui";
 import { ApiError } from "../../lib/api-client";
 import { verifySession } from "../../lib/auth-flow";
@@ -91,61 +92,61 @@ export default function RegisterPage() {
   // Wait for both answers so a form is never shown and then replaced by the invitation-only message.
   if (!inviteChecked || (!inviteRegistration && !policyChecked)) {
     return (
-      <main className="auth-card">
+      <AuthLayout>
         <p className="muted" role="status">
           Loading…
         </p>
-      </main>
+      </AuthLayout>
     );
   }
   if (!inviteRegistration && publicRegistration === false) {
     return (
-      <main className="auth-card">
+      <AuthLayout>
         <h1>Registration is by invitation only</h1>
-        <p className="muted">
-          The public demo accepts new accounts only through a valid organization invitation. Ask an existing organization owner to invite your email address.
+        <p className="sub">
+          This workspace is invitation-only. Ask an organization owner to invite your email address.
         </p>
-        <p>
-          Already registered? <Link href="/login">Sign in</Link>
-        </p>
-      </main>
+        <div className="aside-box auth-footer-link" style={{ marginTop: 0 }}>
+          <strong>Already registered?</strong> <Link href="/login">Sign in</Link>
+        </div>
+      </AuthLayout>
     );
   }
   return (
-    <main className="auth-card">
+    <AuthLayout>
       <h1>{inviteRegistration ? "Join your teammate’s organization" : "Create your organization"}</h1>
-      <p className="muted">
+      <p className="sub">
         {inviteRegistration
-          ? "Create your account using the invited email. Your account will join the organization directly; no separate organization will be created."
-          : "You become the owner of your new organization. If a colleague invited you, open their invitation link to register directly into their organization. Existing accounts can sign in and accept an invitation under Team."}
+          ? "Use your invited email to join your teammate’s workspace."
+          : "Set up a private workspace for your team. You’ll become its owner."}
       </p>
       <form onSubmit={submit} noValidate>
         <FormError message={error} />
         <Field label="Your name" htmlFor="displayName" error={fields.displayName}>
-          <input id="displayName" name="displayName" autoComplete="name" required aria-describedby={fields.displayName ? "displayName-error" : undefined} />
+          <input id="displayName" name="displayName" autoComplete="name" required autoFocus placeholder="Ada Lovelace" aria-describedby={fields.displayName ? "displayName-error" : undefined} />
         </Field>
         {!inviteRegistration ? (
           <Field label="Organization name" htmlFor="organizationName" error={fields.organizationName}>
-            <input id="organizationName" name="organizationName" autoComplete="organization" required />
+            <input id="organizationName" name="organizationName" autoComplete="organization" required placeholder="Your team or company" />
           </Field>
         ) : null}
         <Field label="Email" htmlFor="email" error={fields.email}>
-          <input id="email" name="email" type="email" autoComplete="username" required />
+          <input id="email" name="email" type="email" autoComplete="username" required placeholder="you@company.com" />
         </Field>
         <Field label="Password (12+ characters)" htmlFor="password" error={fields.password}>
-          <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required />
+          <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required placeholder="At least 12 characters" />
         </Field>
-        <button type="submit" className="btn" disabled={busy}>
+        <button type="submit" className="btn block" disabled={busy}>
           {busy ? "Creating…" : inviteRegistration ? "Join organization" : "Create account"}
         </button>
       </form>
-      <p>
-        Already registered?{" "}
+      <div className="aside-box auth-footer-link">
+        <strong>Already registered?</strong>{" "}
         <Link href={inviteRegistration && inviteToken ? `/login#invite=${encodeURIComponent(inviteToken)}` : "/login"}>
           Sign in
         </Link>
         {inviteRegistration ? " to accept this invitation." : null}
-      </p>
-    </main>
+      </div>
+    </AuthLayout>
   );
 }

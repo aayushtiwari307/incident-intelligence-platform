@@ -72,8 +72,9 @@ export function ResolveForm({
   }
 
   return (
-    <form className="card" aria-label="Resolve incident" onSubmit={submit}>
-      <p id="resolution-help" className="muted">
+    <form className="panel mt" aria-label="Resolve incident" onSubmit={submit}>
+      <h2 className="label">Resolve incident</h2>
+      <p id="resolution-help" className="hint" style={{ marginBottom: 14 }}>
         Resolution details are optional. Leave both blank to resolve without them; if you enter one, enter both. Each field
         allows up to 2,000 characters.
       </p>

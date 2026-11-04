@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { INCIDENT_SEVERITIES, INCIDENT_STATUSES, type IncidentDto, type IncidentSeverity, type IncidentStatus } from "@platform/shared";
+import { Icon } from "../../components/icons";
 import { AppShell, useCan } from "../../components/shell";
-import { Field, FormError, LiveStatus, SeverityBadge, StatusBadge } from "../../components/ui";
+import { Avatar, EmptyState, Field, FormError, LiveStatus, PageHeader, SeverityBadge, SkeletonRows, StatusBadge } from "../../components/ui";
 import { ApiError } from "../../lib/api-client";
-import { SEVERITY_LABEL, STATUS_LABEL, errorText, relativeTime } from "../../lib/format";
+import { SEVERITY_LABEL, STATUS_LABEL, errorText, incidentRef, relativeTime } from "../../lib/format";
 import { matchesFilters, reconcileList } from "../../lib/realtime-state";
 import { api, useSession } from "../../lib/session";
 import { useRealtime } from "../../lib/use-realtime";
@@ -19,7 +21,10 @@ export default function IncidentsPage() {
   );
 }
 
+const STATUS_TABS: Array<{ value: IncidentStatus | ""; label: string }> = [{ value: "", label: "All" }, ...INCIDENT_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
+
 function IncidentList() {
+  const router = useRouter();
   const canCreate = useCan("incident:create");
   const { state } = useSession();
   const currentUserId = state.status === "authenticated" ? state.me.user.id : "";
@@ -30,12 +35,16 @@ function IncidentList() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const requestSeq = useRef(0);
   const loading = useRef(false);
   const changedWhileLoading = useRef(false);
   // Live updates read the current filters and paging state without re-subscribing on every change.
   const live = useRef({ status, severity, assignee, hasMore: false, userId: currentUserId });
   live.current = { status, severity, assignee, hasMore: nextCursor !== null, userId: currentUserId };
+  // Keyboard navigation reads the same way, so the key handler is registered once.
+  const keys = useRef<{ items: IncidentDto[]; active: number }>({ items: [], active: -1 });
+  keys.current = { items: items ?? [], active: activeIndex };
 
   const load = useCallback(
     async (cursor?: string): Promise<void> => {
@@ -68,6 +77,7 @@ function IncidentList() {
 
   useEffect(() => {
     setItems(null);
+    setActiveIndex(-1);
     void load();
   }, [load]);
 
@@ -81,17 +91,57 @@ function IncidentList() {
     onSync: () => void load(),
   });
 
+  // J / K move a highlight through the rows and Enter opens it. Ignored while typing, in dialogs, or on a focused control.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const { items: rows, active } = keys.current;
+      if (rows.length === 0) return;
+      const key = event.key.toLowerCase();
+      if (key === "j") {
+        setActiveIndex(Math.min(rows.length - 1, active + 1));
+      } else if (key === "k") {
+        setActiveIndex(Math.max(0, active - 1));
+      } else if (key === "enter" && active >= 0 && (!target || target === document.body || target.id === "main")) {
+        const row = rows[active];
+        if (row) router.push(`/incidents/${encodeURIComponent(row.id)}`);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
+  useEffect(() => {
+    if (activeIndex >= 0) document.querySelector(`[data-row-index="${activeIndex}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
+
   return (
     <>
-      <div className="page-head">
-        <h1>Incidents</h1>
-        <LiveStatus status={liveStatus} />
-        {canCreate ? (
-          <button type="button" className="btn" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
-            {creating ? "Cancel" : "New incident"}
-          </button>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Incidents"
+        actions={
+          <>
+            <LiveStatus status={liveStatus} />
+            {canCreate ? (
+              <button type="button" className="btn" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
+                {creating ? (
+                  "Cancel"
+                ) : (
+                  <>
+                    <Icon name="plus" size={14} stroke={3} />
+                    New incident
+                  </>
+                )}
+              </button>
+            ) : null}
+          </>
+        }
+      >
+        Everything your team is tracking, newest first.
+      </PageHeader>
 
       {creating ? (
         <NewIncidentForm
@@ -102,83 +152,89 @@ function IncidentList() {
         />
       ) : null}
 
-      <form className="filters" aria-label="Filter incidents" onSubmit={(e) => e.preventDefault()}>
-        <label>
-          Status
-          <select value={status} onChange={(e) => setStatus(e.target.value as IncidentStatus | "")}>
-            <option value="">All</option>
-            {INCIDENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Severity
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity | "")}>
-            <option value="">All</option>
-            {INCIDENT_SEVERITIES.map((s) => (
-              <option key={s} value={s}>
-                {SEVERITY_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Assignee
-          <select value={assignee} onChange={(e) => setAssignee(e.target.value as "" | "me" | "unassigned")}>
-            <option value="">Anyone</option>
-            <option value="me">Assigned to me</option>
-            <option value="unassigned">Unassigned</option>
-          </select>
-        </label>
+      <form className="toolbar" aria-label="Filter incidents" onSubmit={(e) => e.preventDefault()}>
+        <div className="segmented" role="group" aria-label="Filter by status">
+          {STATUS_TABS.map((tab) => (
+            <button key={tab.value || "all"} type="button" aria-pressed={status === tab.value} onClick={() => setStatus(tab.value)}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="toolbar-right">
+          <label className="mini-select">
+            <span className="visually-hidden">Severity</span>
+            <select value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity | "")}>
+              <option value="">All severities</option>
+              {INCIDENT_SEVERITIES.map((s) => (
+                <option key={s} value={s}>
+                  {SEVERITY_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mini-select">
+            <span className="visually-hidden">Assignee</span>
+            <select value={assignee} onChange={(e) => setAssignee(e.target.value as "" | "me" | "unassigned")}>
+              <option value="">Anyone</option>
+              <option value="me">Assigned to me</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </label>
+          <span className="hotkeys" aria-hidden="true">
+            <span className="kbd">J</span> <span className="kbd">K</span> move &nbsp; <span className="kbd">Enter</span> open
+          </span>
+        </div>
       </form>
 
       <FormError message={error} />
-      {items === null && !error ? <p role="status">Loading incidents…</p> : null}
-      {items && items.length === 0 ? (
-        <p className="empty" role="status">
-          No incidents match. {canCreate ? "Use “New incident” to open one." : ""}
-        </p>
-      ) : null}
-      {items && items.length > 0 ? (
-        <table className="table">
-          <caption className="visually-hidden">Incidents, newest first</caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Title</th>
-              <th scope="col">Severity</th>
-              <th scope="col">Status</th>
-              <th scope="col">Assignee</th>
-              <th scope="col">Opened</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i) => (
-              <tr key={i.id}>
-                <td>{i.number}</td>
-                <td>
-                  <Link href={`/incidents/${i.id}`}>{i.title}</Link>
-                </td>
-                <td>
-                  <SeverityBadge severity={i.severity} />
-                </td>
-                <td>
-                  <StatusBadge status={i.status} />
-                </td>
-                <td>{i.assignee?.displayName ?? <span className="muted">Unassigned</span>}</td>
-                <td title={i.createdAt}>{relativeTime(i.createdAt)}</td>
-              </tr>
+      <section className="panel flush" aria-label="Incident list">
+        {items === null && !error ? <SkeletonRows rows={5} label="Loading incidents…" /> : null}
+        {items && items.length === 0 ? (
+          <EmptyState center icon="incidents" title="No incidents match these filters" action={undefined}>
+            {status || severity || assignee ? "Try another status or severity, or clear the filters to see everything." : "Alerts from Alertmanager appear here automatically."}
+            {canCreate ? " You can also open one by hand with New incident." : ""}
+          </EmptyState>
+        ) : null}
+        {items && items.length > 0 ? (
+          <ul className="incident-list">
+            {items.map((i, index) => (
+              <li
+                key={i.id}
+                data-row-index={index}
+                className={`irow sev-${i.severity}${i.status === "resolved" ? " is-resolved" : ""}${index === activeIndex ? " is-active" : ""}`}
+              >
+                <span className="sevbar" aria-hidden="true" />
+                <span className="ref">{incidentRef(i.number)}</span>
+                <div className="irow-main">
+                  <Link className="title" href={`/incidents/${i.id}`}>
+                    {i.title}
+                  </Link>
+                  <div className="sub" title={i.createdAt}>
+                    Opened {relativeTime(i.createdAt)}
+                    {i.resolvedAt ? ` · resolved ${relativeTime(i.resolvedAt)}` : ""}
+                  </div>
+                </div>
+                <SeverityBadge severity={i.severity} />
+                <StatusBadge status={i.status} />
+                <Avatar name={i.assignee?.displayName} />
+              </li>
             ))}
-          </tbody>
-        </table>
-      ) : null}
-      {nextCursor ? (
-        <button type="button" className="btn secondary" onClick={() => void load(nextCursor)}>
-          Load more
-        </button>
+          </ul>
+        ) : null}
+      </section>
+
+      {items && items.length > 0 ? (
+        <div className="list-foot">
+          <span>
+            Showing {items.length} incident{items.length === 1 ? "" : "s"}
+            {nextCursor ? " so far" : ""}. Updates appear live when real-time is on.
+          </span>
+          {nextCursor ? (
+            <button type="button" className="btn secondary" onClick={() => void load(nextCursor)}>
+              Load more
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </>
   );
@@ -211,26 +267,38 @@ function NewIncidentForm({ onCreated }: { onCreated(incident: IncidentDto): void
   }
 
   return (
-    <form className="card" onSubmit={submit} noValidate aria-label="New incident">
+    <form className="panel mt-lg panel-form" onSubmit={submit} noValidate aria-label="New incident">
+      <h2 className="label">New incident</h2>
       <FormError message={error} />
-      <Field label="Title" htmlFor="new-title" error={fields.title}>
-        <input id="new-title" name="title" maxLength={200} required autoFocus />
-      </Field>
-      <Field label="Severity" htmlFor="new-severity">
-        <select id="new-severity" name="severity" defaultValue="sev3">
-          {INCIDENT_SEVERITIES.map((s) => (
-            <option key={s} value={s}>
-              {SEVERITY_LABEL[s]}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="form-grid" style={{ marginBottom: 16 }}>
+        <div className="field wide">
+          <label htmlFor="new-title">Title</label>
+          <input id="new-title" name="title" maxLength={200} required autoFocus placeholder="What is broken, in a few words" aria-describedby={fields.title ? "new-title-error" : undefined} />
+          {fields.title ? (
+            <p id="new-title-error" className="field-error">
+              {fields.title}
+            </p>
+          ) : null}
+        </div>
+        <div className="field" style={{ flex: "1 1 180px" }}>
+          <label htmlFor="new-severity">Severity</label>
+          <select id="new-severity" name="severity" defaultValue="sev3">
+            {INCIDENT_SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {SEVERITY_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <Field label="What is happening?" htmlFor="new-description" error={fields.description}>
-        <textarea id="new-description" name="description" rows={4} maxLength={10000} />
+        <textarea id="new-description" name="description" rows={4} maxLength={10000} placeholder="Symptoms, who is affected, what you have tried" />
       </Field>
-      <button type="submit" className="btn" disabled={busy}>
-        {busy ? "Opening…" : "Open incident"}
-      </button>
+      <div className="actions">
+        <button type="submit" className="btn" disabled={busy}>
+          {busy ? "Opening…" : "Open incident"}
+        </button>
+      </div>
     </form>
   );
 }

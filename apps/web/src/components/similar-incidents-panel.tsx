@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { SimilarIncidentDto, SimilarIncidentsDto } from "@platform/shared";
 import { api } from "../lib/session";
-import { SEVERITY_LABEL, errorText, relativeTime } from "../lib/format";
+import { errorText, incidentRef, relativeTime } from "../lib/format";
 import { SeverityBadge } from "./ui";
 
 type SimilarState =
@@ -20,11 +20,11 @@ export function SimilarIncidentsContent({
   onRetry(): void;
 }) {
   return (
-    <section className="card" aria-labelledby="similar-incidents-heading">
-      <h2 id="similar-incidents-heading" style={{ marginTop: 0 }}>
+    <section className="panel" aria-labelledby="similar-incidents-heading">
+      <h2 id="similar-incidents-heading" className="label">
         Similar incidents
       </h2>
-      {state.status === "loading" ? <p role="status">Finding similar incidents…</p> : null}
+      {state.status === "loading" ? <p role="status" className="hint">Finding similar incidents…</p> : null}
       {state.status === "error" ? (
         <div>
           <p role="alert" className="form-error">{state.message}</p>
@@ -34,47 +34,52 @@ export function SimilarIncidentsContent({
         </div>
       ) : null}
       {state.status === "loaded" && state.results.length === 0 ? (
-        <p className="muted">No similar resolved incidents found.</p>
+        <div role="status">
+          <div className="title-sm">Nothing similar yet</div>
+          <div className="hint">Resolved incidents with a recorded fix appear here, ranked by matching terms.</div>
+        </div>
       ) : null}
       {state.status === "loaded" && state.results.length > 0 ? (
         <ol className="plain">
           {state.results.slice(0, 5).map((result) => (
-            <li key={result.id} className="card">
-              <div className="page-head">
-                <h3 style={{ margin: 0 }}>
+            <li key={result.id} className="similar-item">
+              <div className="row-between" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
+                <h3 style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                   <Link href={`/incidents/${encodeURIComponent(result.id)}`}>
-                    <span className="muted">#{result.number}</span> {result.title}
+                    <span className="mono dim" style={{ fontSize: 12 }}>{incidentRef(result.number)}</span> {result.title}
                   </Link>
                 </h3>
                 <SeverityBadge severity={result.severity} />
               </div>
-              <p className="meta">
+              <p className="hint mono" style={{ fontSize: 11, marginTop: 2 }}>
                 Resolved {result.resolvedAt ? relativeTime(result.resolvedAt) : "at an unknown time"}
               </p>
               {result.rootCause || result.fixApplied ? (
                 <dl>
                   {result.rootCause ? (
-                    <>
+                    <div>
                       <dt>Root cause</dt>
                       <dd className="prewrap">{result.rootCause}</dd>
-                    </>
+                    </div>
                   ) : null}
                   {result.fixApplied ? (
-                    <>
+                    <div>
                       <dt>Fix applied</dt>
                       <dd className="prewrap">{result.fixApplied}</dd>
-                    </>
+                    </div>
                   ) : null}
                 </dl>
               ) : (
-                <p className="muted">No resolution details recorded.</p>
+                <p className="hint" style={{ marginTop: 8 }}>No resolution details recorded.</p>
               )}
               {result.matchedTerms.length > 0 ? (
-                <p>
-                  <strong>Matched terms:</strong> {result.matchedTerms.join(", ")}
-                </p>
+                <div className="tags" aria-label="Matched terms">
+                  <span className="hint">Matched terms:</span>
+                  {result.matchedTerms.map((term) => (
+                    <span className="chip plain tiny" key={term}>{term}</span>
+                  ))}
+                </div>
               ) : null}
-              <span className="visually-hidden">{SEVERITY_LABEL[result.severity]}</span>
             </li>
           ))}
         </ol>

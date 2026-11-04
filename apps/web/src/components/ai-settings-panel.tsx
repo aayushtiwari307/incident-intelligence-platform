@@ -8,8 +8,8 @@ import { api } from "../lib/session";
 /** Presentational: owner/admin switch for AI suggestions. Off by default; the server switch can never be changed from here. */
 export function AiSettingsView({ settings, busy, error, onToggle }: { settings: AiSettingsDto | null; busy: boolean; error: string | null; onToggle(next: boolean): void }) {
   return (
-    <section aria-labelledby="ai-settings-h" className="card">
-      <h2 id="ai-settings-h" style={{ marginTop: 0 }}>
+    <section aria-labelledby="ai-settings-h" className="panel">
+      <h2 id="ai-settings-h" className="label">
         AI suggestions
       </h2>
       <div role="alert" className="form-error">
@@ -21,14 +21,16 @@ export function AiSettingsView({ settings, busy, error, onToggle }: { settings: 
       ) : null}
       {settings ? (
         <>
-          <p>
-            Status: <strong>{settings.organizationOptIn ? "On for this organization" : "Off for this organization"}</strong>
+          <p style={{ marginBottom: 10 }}>
+            <span className={`chip ${settings.organizationOptIn ? "ok" : "plain"}`}>
+              {settings.organizationOptIn ? "On for this organization" : "Off for this organization"}
+            </span>
           </p>
-          <p className="muted">
+          <p className="hint" style={{ marginBottom: 12 }}>
             When on, a responder can ask for a suggestion on an incident. The incident text (redacted on a best-effort basis) is sent to the configured AI provider.
             Suggestions are drafts only: a person reviews and saves everything. Daily allowance: {settings.usedToday} of {settings.dailyLimit} used today (UTC).
           </p>
-          <button type="button" className="btn secondary" disabled={busy} aria-pressed={settings.organizationOptIn} onClick={() => onToggle(!settings.organizationOptIn)}>
+          <button type="button" className="btn accent" disabled={busy} aria-pressed={settings.organizationOptIn} onClick={() => onToggle(!settings.organizationOptIn)}>
             {settings.organizationOptIn ? "Turn off AI suggestions" : "Turn on AI suggestions"}
           </button>
         </>

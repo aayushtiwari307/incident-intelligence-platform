@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { can } from "@platform/shared";
-import { ROLE_LABEL } from "../lib/format";
+import { ROLE_LABEL, initials } from "../lib/format";
 import { api, useSession } from "../lib/session";
+import { CommandPalette } from "./command-palette";
+import { Icon, LogoMark, type IconName } from "./icons";
+
+const NAV: Array<{ href: string; label: string; icon: IconName }> = [
+  { href: "/incidents", label: "Incidents", icon: "incidents" },
+  { href: "/services", label: "Services", icon: "services" },
+  { href: "/github", label: "GitHub", icon: "github" },
+  { href: "/team", label: "Team", icon: "team" },
+];
 
 /**
  * Wraps pages that need a signed-in user. This is a convenience (redirect, hide controls): every API call is
@@ -15,10 +24,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { state, logout, setMe } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const signedIn = state.status === "authenticated";
 
   useEffect(() => {
     if (state.status === "anonymous") router.replace("/login");
   }, [state.status, router]);
+
+  // Ctrl K (or Cmd K) opens the "jump to" palette from anywhere in the signed-in app.
+  useEffect(() => {
+    if (!signedIn) return;
+    function onKey(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [signedIn]);
 
   if (state.status === "loading") return <p role="status" className="page-status">Loading…</p>;
   if (state.status === "error") {
@@ -31,59 +55,79 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (state.status === "anonymous") return <p role="status" className="page-status">Redirecting to sign in…</p>;
 
   const { me } = state;
-  const link = (href: string, label: string) => (
-    <Link href={href} aria-current={pathname === href || pathname.startsWith(`${href}/`) ? "page" : undefined}>
-      {label}
-    </Link>
-  );
+  const activeOrg = me.memberships.find((m) => m.organizationId === me.activeOrganizationId) ?? me.memberships[0];
 
   return (
-    <>
+    <div className="app">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="topbar">
-        <strong className="brand">Incident platform</strong>
-        <nav aria-label="Main">
-          {link("/incidents", "Incidents")}
-          {link("/services", "Services")}
-          {link("/github", "GitHub") }
-          {link("/team", "Team")}
-        </nav>
-        <div className="topbar-right">
-          {me.memberships.length > 1 ? (
-            <label className="org-switch">
-              <span className="visually-hidden">Organization</span>
-              <select
-                value={me.activeOrganizationId ?? ""}
-                onChange={async (e) => {
-                  setMe(await api.switchOrganization(e.target.value));
-                  router.push("/incidents");
-                }}
-              >
-                {me.memberships.map((m) => (
-                  <option key={m.organizationId} value={m.organizationId}>
-                    {m.organizationName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <span>{me.memberships[0]?.organizationName}</span>
-          )}
-          <span className="role-chip" title="Your role in this organization">
-            {me.role ? ROLE_LABEL[me.role] : "No role"}
+      <aside className="sidebar">
+        <Link href="/incidents" className="brand">
+          <LogoMark />
+          IIP Console
+        </Link>
+        <button type="button" className="search-btn" onClick={() => setPaletteOpen(true)} aria-keyshortcuts="Control+K" aria-label="Search and jump to, Control K">
+          <span>
+            <Icon name="search" size={15} stroke={2} />
+            Search
           </span>
-          <span className="muted">{me.user.displayName}</span>
-          <button type="button" className="btn-link" onClick={() => void logout().then(() => router.replace("/login"))}>
-            Sign out
+          <span className="kbd" aria-hidden="true">
+            Ctrl K
+          </span>
+        </button>
+        {me.memberships.length > 1 ? (
+          <label className="org-switch">
+            <span className="visually-hidden">Organization</span>
+            <select
+              value={me.activeOrganizationId ?? ""}
+              onChange={async (e) => {
+                setMe(await api.switchOrganization(e.target.value));
+                router.push("/incidents");
+              }}
+            >
+              {me.memberships.map((m) => (
+                <option key={m.organizationId} value={m.organizationId}>
+                  {m.organizationName}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <nav aria-label="Main">
+          {NAV.map((item) => {
+            const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link key={item.href} href={item.href} className="nav-link" aria-current={current ? "page" : undefined}>
+                <Icon name={item.icon} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="user-card">
+          <span className="avatar-lg" aria-hidden="true">
+            {initials(me.user.displayName).slice(0, 1)}
+            <span className="presence" />
+          </span>
+          <div className="who" title="Your role in this organization">
+            <strong>{me.user.displayName}</strong>
+            <span>
+              {activeOrg?.organizationName ?? "No organization"} · {me.role ? ROLE_LABEL[me.role] : "No role"}
+            </span>
+          </div>
+          <button type="button" className="icon-btn" aria-label="Sign out" title="Sign out" onClick={() => void logout().then(() => router.replace("/login"))}>
+            <Icon name="signout" size={16} />
           </button>
         </div>
-      </header>
-      <main id="main" tabIndex={-1} className="container">
-        {me.role ? children : <p role="alert">You are not a member of any organization yet. Ask an admin for an invitation.</p>}
-      </main>
-    </>
+      </aside>
+      <div className="main-wrap">
+        <main id="main" tabIndex={-1} className="container">
+          {me.role ? children : <p role="alert">You are not a member of any organization yet. Ask an admin for an invitation.</p>}
+        </main>
+      </div>
+      {paletteOpen ? <CommandPalette onClose={() => setPaletteOpen(false)} /> : null}
+    </div>
   );
 }
 

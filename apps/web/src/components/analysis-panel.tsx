@@ -56,9 +56,9 @@ export function AnalysisPanel({ incident, onApplySeverity }: { incident: Inciden
   }
 
   return (
-    <section aria-labelledby="ai-h" className="card">
-      <h2 id="ai-h" style={{ marginTop: 0 }}>
-        AI analysis <span className="badge">Suggestion</span>
+    <section aria-labelledby="ai-h" className="panel">
+      <h2 id="ai-h" className="label">
+        AI analysis <span className="chip plain tiny">Suggestion</span>
       </h2>
       <div role="alert" className="form-error">
         {error}
@@ -75,7 +75,7 @@ export function AnalysisPanel({ incident, onApplySeverity }: { incident: Inciden
       {a?.status === "completed" ? (
         <div data-testid="analysis-result">
           <p className="prewrap">{a.summary}</p>
-          <dl>
+          <dl className="defs">
             <dt>Suggested severity</dt>
             <dd>
               {a.suggestedSeverity ? SEVERITY_LABEL[a.suggestedSeverity] : "—"}

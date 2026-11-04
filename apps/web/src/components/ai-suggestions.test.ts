@@ -57,7 +57,7 @@ describe("AI suggestions panel", () => {
     assert.ok(!html.includes("<script>"), "model text must never become markup");
     assert.ok(html.includes("&lt;script&gt;"));
     assert.ok(html.includes("verify before use"));
-    assert.ok(html.includes('href="/incidents/i2"') && html.includes("#7 Gateway pool exhaustion"));
+    assert.ok(html.includes('href="/incidents/i2"') && html.includes("INC-0007 Gateway pool exhaustion"));
     assert.ok(html.includes("Incident no longer available"));
     assert.ok(html.includes("Use severity as draft") && html.includes("Use next steps as comment draft") && html.includes("Dismiss"));
     assert.ok(!html.includes("Apply and save"), "there is no auto-apply");
