@@ -2,37 +2,29 @@
 
 **Purpose:** Durable handoff across Claude/GPT chats. The current source ZIP is the source of truth for code; actual command output is the source of truth for verification. This file is context, not proof that a feature works.
 
-**Last updated:** 2026-11-02. Historical milestone statements below retain their original dates and evidence scope. Current claims below distinguish source implementation, automated verification and live-runtime evidence.
+**Last updated:** 2026-11-05. Historical milestone statements below retain their original dates and evidence scope. Current claims below distinguish source implementation, automated verification and live-runtime evidence.
 
 **Historical 2026-10-14 note:** M5 was then recorded as implemented and unaccepted because the original runtime/CI/acceptance evidence had not been completed. That wording describes the 2026-10-14 evidence snapshot, not the current project status. M5 is now considered complete among M1–M5; see the current state below and preserve the original ledger for provenance.
 
-## Current status (2026-11-02)
+## Current status (2026-11-05)
 
-- **M1–M5:** complete. M5 should not be described with the obsolete blanket “implemented, NOT accepted”; historical dated notes may retain that original status label for evidence provenance.
-- **M6 free deployment:** deployed on Render Free + Neon. Live health/landing evidence and deployment records remain the applicable historical live evidence; later health rechecks are still pending.
-- **M7 Alertmanager:** implementation is complete and merged. On 2026-10-26, the Alertmanager endpoint passed 8 synthetic live scenarios. An actual external Alertmanager sender was not tested, so that live path remains unverified.
-- **M8 similar incident retrieval:** implemented without AI, including tenant-scoped resolution/search behavior and incident-detail integration. Automated and local verification is recorded; no claim of production-validation completeness should be inferred beyond that evidence.
-- **M9 grounded AI:** implemented and locally tested with a mock provider. AI remains disabled on the public deployment, and no live AI-provider request should be claimed.
-- **GitHub issue/PR enrichment:** implementation is complete. Successful live retrieval is unverified; the previous live attempt returned `rate_limited`, so do not present it as completed live evidence.
-- **M10 service catalog and change correlation:** implemented. All 14 migrations, including `0013_github_issue_enrichment.sql` and `0014_service_change_context.sql`, were confirmed applied on 2026-10-26. One live change event was accepted under ID `f7441240-6bec-488e-8490-9203495824f2`; subsequent retries returned `401`. Service-link persistence and visible change-event correlation remain unverified.
-- **Previously reported final-tree verification:** CI green, 537 unit tests, 271 integration tests, smoke 20/20, and zero audit vulnerabilities. Treat these as reported verification results and do not infer unlisted live-runtime coverage.
-- **Previously reported live page loading:** login, Services and GitHub pages loaded successfully in prior runtime evidence. Live health endpoints and targeted Services/GitHub workflows have not been freshly rechecked in this review.
-- **Realtime:** source/automated verification is present, but two-browser deployed verification remains pending. It requires a separate direct `REALTIME_DATABASE_URL` and explicit owner approval.
-- **Control Room redesign:** six screens are designed in Claude Canvas, but implementation and redesign verification are incomplete. Register/invite and incident create/edit designs remain outstanding.
+- **M1–M10:** implementation is complete. Previously reported evidence remains 537 unit tests, 271 integration tests, smoke 20/20, and zero audit vulnerabilities; do not rerun unless a concrete code change justifies it.
+- **M5 realtime:** complete and closed. Verified with two tabs in the same browser session. No independent-browser or separate-user test will be performed; use that exact evidence wording.
+- **Backup/restore and health checks:** complete and closed. Backup/restore was verified against disposable local PostgreSQL, not production.
+- **M7 Alertmanager:** complete and closed. Synthetic scenarios passed 8/8. On 2026-11-03, the official local Alertmanager container sent a genuine notification to Render and created Incident #6; the temporary integration token and local test files/container were cleaned up.
+- **M8 similar incident retrieval:** implemented and locally verified; tenant-scoped candidates are used as context only.
+- **M10 service/change context:** event `live-check-001` appeared on Incident #3 and remained visible after refresh; live service-link persistence is verified. Correlation is not proof of causation.
+- **GitHub issue/PR enrichment:** implementation is complete. Successful live detail retrieval remains unverified; the previous attempt returned `rate_limited`. Make only one controlled attempt when the limit allows.
+- **Control Room redesign:** implemented, tested locally (83/83 web tests, typecheck and production build), visually approved, pushed and deployed to Render. Do not reopen the redesign.
+- **Project identity and release docs:** package metadata, root MIT license and README are complete and pushed.
+- **Gemini M9 adapter:** implemented for grounded suggestions only, defaulting to `gemini-3.5-flash-lite`. On 2026-11-05, the Windows test folder passed the shared package build and all 322 API Jest tests (31 suites); after a type-only test annotation correction, API typecheck, API build and the focused Gemini tests (5/5) passed. One live Gemini suggestion was successfully generated from synthetic incident INC-0001. The legacy per-incident AI analysis provider remains unavailable for Gemini. Render remains unconfigured and AI stays disabled there pending explicit owner approval.
 
 ## Remaining work
 
-1. Confirm service-link persistence and complete change-event correlation.
-2. Obtain successful live GitHub retrieval evidence.
-3. Recheck live health endpoints and targeted Services/GitHub workflows.
-4. Complete two-browser realtime verification only with a direct `REALTIME_DATABASE_URL` and owner approval.
-5. Perform the backup/restore drill only on disposable local PostgreSQL.
-6. Run an actual external Alertmanager sender test.
-7. Add README screenshots and the live URL; choose the project name and license, and add a root LICENSE while preserving upstream `julmtoz` attribution.
-8. Implement Gemini only after reviewing free-tier data-use terms; keep public-demo AI disabled.
-9. Complete the Control Room UI redesign. Three related screen designs are still outstanding: register/invite and incident create/edit.
+1. One controlled live GitHub issue/PR detail retrieval attempt when the rate limit allows; do not retry repeatedly.
+2. After explicit owner approval, configure Gemini on Render through the API service environment and run one separate synthetic-data public-demo acceptance check. Keep confidential, customer and production data off the Free tier.
 
-**Release evidence:** implemented milestones and focused automated/runtime evidence are not the same as overall production acceptance. Claims should remain limited to the evidence cited above.
+**Release evidence:** implemented code, automated checks, local runtime checks and live-provider acceptance are separate claims. Keep each label exact; do not revisit closed items without new evidence of a defect.
 
 ## 1. Mission and non-negotiable quality rule
 
@@ -84,7 +76,7 @@ Two test-only corrections in the accepted baseline: (1) normalize JSON-shaped va
 4. **Container smoke script** `scripts/smoke-stack.mjs` (+ `npm run smoke:stack`, 4 unit tests): dependency-free HTTP checks of a running stack — health, web `/login`, foreign-Origin rejection (403 ORIGIN_NOT_ALLOWED), registration + hardened cookie (HttpOnly, SameSite=Lax; `__Host-` ⇒ Secure, Path=/, no Domain), me, incident create/list, transition + stale version 409, timeline, AI-disabled behaviour (409 FEATURE_DISABLED), 401 without session, logout revokes the session (old cookie replayed → 401), wrong password 401 / login 200.
 5. **Production containers:** `apps/api/Dockerfile`, `apps/web/Dockerfile` (Next `output: "standalone"`, `outputFileTracingRoot` = repo root), non-root `node` user, health checks. Compose default profile = PostgreSQL + Redis only; opt-in `app` profile builds/runs API + web (loopback-only ports 3000/3001, `MIGRATE_ON_START=apply`). `npm run services:app-up` / `services:app-down` (no `-v`).
 6. **CI** `.github/workflows/ci.yml`: concurrency group, 30-min timeout, checks (deps, hygiene, typecheck, lint, unit, real-Postgres integration, build), then builds+starts the full Compose app stack, asserts API and web containers run as non-root (`id -u`), runs `npm run smoke:stack`, prints container logs only on failure, stops without deleting volumes. **User confirmed the GitHub Actions run for commit `8e0a1d3` was green on 2026-10-13; the run URL was not preserved in this handoff.**
-7. Other: `configureHttpApplication` shared by `main.ts` and the E2E; `isolatedModules: true` in `apps/api/tsconfig.json` (ts-jest then transpiles without per-file type-check — `npm run typecheck` is the type gate; also targets the TS151002 warning, not yet confirmed gone); `@types/express` exact-pinned 5.0.6; Gemini stays disabled; no new env var can redirect the OpenAI URL; ADRs 0014 and 0015, README, DEVELOPMENT, testing conventions updated.
+7. Other: `configureHttpApplication` shared by `main.ts` and the E2E; `isolatedModules: true` in `apps/api/tsconfig.json` (ts-jest then transpiles without per-file type-check — `npm run typecheck` is the type gate; also targets the TS151002 warning, not yet confirmed gone); `@types/express` exact-pinned 5.0.6; Gemini uses a fixed Google host and redirects are rejected; no environment variable can redirect provider API keys; ADRs 0014 and 0015, README, DEVELOPMENT, testing conventions updated.
 
 ### Historical pre-Windows evidence for the M3 candidate (superseded by the actual results in section 5a; retained for provenance)
 | Category | Result |
@@ -157,7 +149,7 @@ Expected when everything passes (after `npm install` + lockfile): unit **287** (
 - API: NestJS, TypeScript, REST. Core request/business rules are in framework-free `ApiHandlers` and thin Nest controllers.
 - DB: PostgreSQL through direct `pg`, handwritten SQL, numbered migrations. No ORM.
 - Jobs: durable **PostgreSQL queue**, not BullMQ. Uses transactional enqueue, `FOR UPDATE SKIP LOCKED`, leases, lease fencing, retry/backoff and idempotent analysis persistence. Redis is not the job queue (and, since M5, is no longer provisioned in Compose).
-- AI: optional OpenAI Responses API via `fetch`; strict Zod output validation; only incident title, description, severity, status should be sent; output is advisory and human applies suggested severity through audited update. AI disabled by default. No live OpenAI call yet; model name `gpt-5-mini` is not verified live. Gemini adapter is not implemented and must remain disabled even if a Gemini key exists.
+- AI: optional advisory grounded suggestions with strict Zod shape validation, source-alias and exact-quote verification, best-effort redaction, organization opt-in and an atomic daily quota. Gemini `generateContent` adapter is implemented for M9 suggestions only (default `gemini-3.5-flash-lite`); the legacy per-incident analysis provider remains unavailable for Gemini. AI stays disabled by default; a live Gemini request is still unverified and must use synthetic incident data because Free-tier prompts/responses may be used to improve Google products.
 - Organizations/security: scrypt password hashing, opaque random session token stored as SHA-256, HttpOnly SameSite=Lax cookie, server-side logout/revocation, live role reads, roles viewer/responder/admin/owner, single-use email-bound invitation tokens, Origin allow-list checks for writes, tenancy derived from authenticated membership (never request org id), composite tenant constraints, cross-tenant IDs return not-found.
 - Incidents: create/list/filter/paging/detail/edit/assign/status/comment/timeline; optimistic concurrency -> 409; timeline entries must reflect all related changes. Removing members atomically unassigns affected incidents and writes corresponding timeline events. Status state machine enforced by service and DB trigger. Owner invariant enforced under concurrency.
 - Real-time (M4 candidate): Socket.IO on the API port, WebSocket only; cookie-authenticated handshake with Origin check; one room per active organization chosen by the server; pushes driven by a PostgreSQL NOTIFY trigger on `incident_events`; `realtime.resync` + REST reload for any recovery; access re-checked immediately on this instance after logout/switch/removal and every 10 s otherwise.

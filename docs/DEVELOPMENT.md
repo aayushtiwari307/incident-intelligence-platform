@@ -89,14 +89,19 @@ you opened is not in `CORS_ORIGINS` (it is also the CSRF allow-list for sign-in,
 incident: an analysis is queued when an incident is created and a responder can re-run it. The worker runs inside the API
 process; look for `job worker started` in the log. Incident text is sent to the provider you configure.
 
-**Grounded AI suggestions (optional, M9, free to try).** Off by default. To try it locally at zero cost, set `AI_ENABLED=true`
-and `AI_PROVIDER=fake` in `apps/api/.env` (a deterministic, keyless stand-in; refused in production), restart the API, sign in
-as an owner or admin, turn on **AI suggestions** on the Team page, then open an incident and click **Suggest with AI**. The
-worker runs in the API process. A suggestion cites similar resolved incidents of your own organization with verbatim quotes;
-**Use severity as draft** and **Use next steps as comment draft** only pre-fill the normal forms: nothing is saved until you
-submit. Two separate switches exist: `AI_PROVIDER` alone controls the older "AI analysis" panel; M9 needs `AI_ENABLED=true`, a
-usable provider and the organization opt-in. `AI_DAILY_REQUEST_LIMIT` (default 20) is per organization per UTC day. The real
-OpenAI adapter exists but is UNVERIFIED against the live API; do not enable it on a public deployment.
+**Grounded AI suggestions (optional, M9).** Off by default. For a keyless local walkthrough, set `AI_ENABLED=true` and
+`AI_PROVIDER=fake` in `apps/api/.env` (a deterministic stand-in; refused in production). For a real Gemini call, set
+`AI_ENABLED=true`, `AI_PROVIDER=gemini`, and `GEMINI_API_KEY` in `apps/api/.env`; the default model is
+`gemini-3.5-flash-lite` and `AI_MODEL` can override it. Keep the key on the API only, restart the API, sign in as an owner
+or admin, turn on **AI suggestions** on the Team page, then open a synthetic test incident and click **Suggest with AI**.
+The worker runs in the API process. The server redacts common secret and personal-data patterns before sending bounded
+incident context, but redaction is best-effort, not a guarantee. Google's Gemini API Free tier may use prompts and responses
+to improve Google products and may have human review; do not send confidential, personal, customer or production incident
+data through a Free-tier key. Use synthetic data only. A suggestion must pass server-side schema and verbatim-quote checks;
+**Use severity as draft** and **Use next steps as comment draft** only pre-fill normal forms: nothing is saved until you
+submit. Two separate switches exist: `AI_PROVIDER` alone controls the older "AI analysis" panel (Gemini does not enable that
+legacy panel); M9 needs `AI_ENABLED=true`, a usable provider and the organization opt-in. `AI_DAILY_REQUEST_LIMIT`
+(default 20) is per organization per UTC day.
 
 Optional settings in `apps/api/.env`: `SESSION_TTL_HOURS` (default 168), `INVITE_TTL_HOURS` (default 168), `AI_MODEL`, `AI_TIMEOUT_MS`, `REALTIME_ENABLED` (default false) and `REALTIME_REVALIDATE_SECONDS` (default 10).
 

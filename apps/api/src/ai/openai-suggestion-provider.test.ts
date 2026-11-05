@@ -5,6 +5,7 @@ import { ProviderError } from "../analysis/provider";
 import { Secret } from "../config/secret";
 import type { AiConfig } from "../config/env";
 import { OpenAiSuggestionProvider } from "./openai-suggestion-provider";
+import { GeminiSuggestionProvider } from "./gemini-suggestion-provider";
 import { assembleSuggestionContext } from "./suggestion-context";
 import { createSuggestionProvider } from "./suggestion-provider-factory";
 import { FakeSuggestionProvider, type SuggestionProviderRequest } from "./suggestion-provider";
@@ -141,10 +142,12 @@ describe("suggestion provider factory", () => {
     assert.equal(createSuggestionProvider(config({ enabled: false })), null);
     assert.equal(createSuggestionProvider({ ...config({}), provider: "none", suggestions: { enabled: false, dailyRequestLimit: 20 } }), null);
     assert.equal(createSuggestionProvider({ ...config({}), provider: "gemini", suggestions: { enabled: false, dailyRequestLimit: 20 } }), null);
+    assert.equal(createSuggestionProvider({ ...config({}), provider: "gemini", apiKey: undefined }), null);
   });
 
-  it("builds the OpenAI adapter, or the keyless fake for AI_PROVIDER=fake", () => {
+  it("builds the OpenAI or Gemini adapter, or the keyless fake for AI_PROVIDER=fake", () => {
     assert.ok(createSuggestionProvider(config({})) instanceof OpenAiSuggestionProvider);
+    assert.ok(createSuggestionProvider(config({ provider: "gemini", model: "gemini-3.5-flash-lite" })) instanceof GeminiSuggestionProvider);
     const fake = createSuggestionProvider({ provider: "fake", enabled: false, model: "m", timeoutMs: 1000, suggestions: { enabled: true, dailyRequestLimit: 20 } });
     assert.ok(fake instanceof FakeSuggestionProvider);
   });

@@ -214,11 +214,13 @@ describe("AI provider is optional", () => {
     assert.match(gemini.disabledReason ?? "", /GEMINI_API_KEY/);
   });
 
-  it("does not report an unimplemented Gemini adapter as enabled when a key is present", () => {
-    const { ai } = loadConfig(base({ AI_PROVIDER: "gemini", GEMINI_API_KEY: "k-test-value" }));
-    assert.equal(ai.enabled, false);
-    assert.match(ai.disabledReason ?? "", /not implemented/i);
-    assert.equal(ai.apiKey, undefined);
+  it("keeps legacy analysis off while making configured Gemini available to grounded suggestions", () => {
+    const { ai } = loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: "k-test-value" }));
+    assert.equal(ai.enabled, false, "the older analysis provider remains unsupported for Gemini");
+    assert.match(ai.disabledReason ?? "", /grounded suggestions only/i);
+    assert.equal(ai.apiKey?.reveal(), "k-test-value");
+    assert.equal(ai.model, "gemini-3.5-flash-lite");
+    assert.equal(ai.suggestions.enabled, true);
   });
 
   it("enables the provider when a key is present", () => {
@@ -247,7 +249,13 @@ describe("grounded AI suggestions are gated by AI_ENABLED (default off)", () => 
     assert.equal(loadConfig(base({ AI_ENABLED: "true" })).ai.suggestions.enabled, false, "provider none");
     assert.match(loadConfig(base({ AI_ENABLED: "true" })).ai.suggestions.disabledReason ?? "", /AI_PROVIDER is none/);
     assert.match(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai" })).ai.suggestions.disabledReason ?? "", /OPENAI_API_KEY/);
-    assert.match(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: KEY })).ai.suggestions.disabledReason ?? "", /not implemented/);
+    const geminiWithoutKey = loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini" })).ai;
+    assert.equal(geminiWithoutKey.suggestions.enabled, false);
+    assert.match(geminiWithoutKey.suggestions.disabledReason ?? "", /GEMINI_API_KEY/);
+    const gemini = loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: KEY })).ai;
+    assert.equal(gemini.suggestions.enabled, true);
+    assert.equal(gemini.model, "gemini-3.5-flash-lite");
+    assert.equal(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: KEY, AI_MODEL: "gemini-2.5-flash-lite" })).ai.model, "gemini-2.5-flash-lite");
     assert.equal(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY })).ai.suggestions.enabled, true);
     assert.equal(loadConfig(base({ AI_ENABLED: "false", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY })).ai.suggestions.enabled, false);
   });
@@ -267,10 +275,13 @@ describe("grounded AI suggestions are gated by AI_ENABLED (default off)", () => 
     assert.ok(problemsOf(base({ NODE_ENV: "production", AI_ENABLED: "true", AI_PROVIDER: "fake", CORS_ORIGINS: "https://app.example.com" })).some((p) => p.startsWith("AI_PROVIDER:")));
   });
 
-  it("describeConfig never prints the key", () => {
-    const text = JSON.stringify(describeConfig(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY }))));
-    assert.ok(!text.includes(KEY));
-    assert.match(text, /"suggestions":\{"enabled":true/);
+  it("describeConfig never prints OpenAI or Gemini keys", () => {
+    const openaiText = JSON.stringify(describeConfig(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "openai", OPENAI_API_KEY: KEY }))));
+    const geminiText = JSON.stringify(describeConfig(loadConfig(base({ AI_ENABLED: "true", AI_PROVIDER: "gemini", GEMINI_API_KEY: KEY }))));
+    assert.ok(!openaiText.includes(KEY));
+    assert.ok(!geminiText.includes(KEY));
+    assert.match(openaiText, /"suggestions":\{"enabled":true/);
+    assert.match(geminiText, /"suggestions":\{"enabled":true/);
   });
 });
 

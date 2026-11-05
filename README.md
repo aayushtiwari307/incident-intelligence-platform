@@ -228,10 +228,12 @@ is more hands-off than the manual linking here.
 - [x] M10: service catalog and change context
 - [x] Full-tree verification on `main` (2026-10-25)
 - [x] Disposable local PostgreSQL backup/restore verification (2026-11-02)
-- [ ] Two-browser real-time acceptance on the deployed URL
+- [x] Realtime verified with two tabs, same browser session (no independent-browser claim)
 - [ ] Successful live GitHub issue/PR detail retrieval
-- [ ] Live external Alertmanager sender test
-- [ ] Public-demo AI remains disabled; a Gemini adapter and provider terms review are pending
+- [x] Genuine local Alertmanager container delivery to Render verified (Incident #6)
+- [x] Gemini adapter implemented for M9 grounded suggestions (free-tier tests must use synthetic data)
+- [x] Local live Gemini suggestion verified with synthetic incident data on 2026-11-05; Render configuration and public-demo acceptance remain pending
+- [x] Control Room redesign deployed to Render and visually approved
 
 ---
 
@@ -243,6 +245,7 @@ is more hands-off than the manual linking here.
 | Architecture decisions | [`docs/decisions/`](docs/decisions/) |
 | Alertmanager webhook | [`docs/integrations/alertmanager.md`](docs/integrations/alertmanager.md) |
 | Change-event webhook | [`docs/integrations/change-events.md`](docs/integrations/change-events.md) |
+| Gemini grounded suggestions | [`docs/integrations/gemini-ai-suggestions.md`](docs/integrations/gemini-ai-suggestions.md) |
 | GitHub enrichment design | [`docs/design/github-issue-enrichment.md`](docs/design/github-issue-enrichment.md) |
 | M10 design | [`docs/design/m10-service-change-context.md`](docs/design/m10-service-change-context.md) |
 | Free deployment guide | [`docs/deployment/m6-free-deployment.md`](docs/deployment/m6-free-deployment.md) |

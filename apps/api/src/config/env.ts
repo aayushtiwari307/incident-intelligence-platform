@@ -219,9 +219,11 @@ function parseCorsOrigins(raw: string | undefined, nodeEnv: NodeEnv, problems: s
   return [...new Set(origins)];
 }
 
+const DEFAULT_GEMINI_SUGGESTION_MODEL = "gemini-3.5-flash-lite";
+
 function resolveAi(env: z.infer<typeof envSchema>, suggestionsSwitch: boolean): AiConfig {
   const provider = env.AI_PROVIDER ?? "none";
-  const model = env.AI_MODEL ?? "gpt-5-mini";
+  const model = env.AI_MODEL ?? (provider === "gemini" ? DEFAULT_GEMINI_SUGGESTION_MODEL : "gpt-5-mini");
   const timeoutMs = env.AI_TIMEOUT_MS ?? 30_000;
   const dailyRequestLimit = env.AI_DAILY_REQUEST_LIMIT ?? 20;
   const off = (reason: string) => ({ enabled: false, disabledReason: reason, dailyRequestLimit });
@@ -243,9 +245,17 @@ function resolveAi(env: z.infer<typeof envSchema>, suggestionsSwitch: boolean): 
     return { provider, enabled: false, disabledReason: `${name} is not set`, model, timeoutMs, suggestions: gate(`${name} is not set`, false) };
   }
   if (provider === "gemini") {
-    // Gemini is accepted for an explicit, non-fatal configuration, but no adapter exists yet.
-    // Do not report AI as enabled when the provider factory will return null.
-    return { provider, enabled: false, disabledReason: "Gemini provider is not implemented", model, timeoutMs, suggestions: gate("Gemini provider is not implemented", false) };
+    // Gemini is intentionally wired only to M9 grounded suggestions. The older incident-analysis
+    // provider factory stays unavailable, while the separate suggestions gate can create its adapter.
+    return {
+      provider,
+      enabled: false,
+      disabledReason: "Gemini is configured for grounded suggestions only; legacy AI analysis is unavailable",
+      apiKey: new Secret(key),
+      model,
+      timeoutMs,
+      suggestions: gate(null, true),
+    };
   }
   return { provider, enabled: true, apiKey: new Secret(key), model, timeoutMs, suggestions: gate(null, true) };
 }

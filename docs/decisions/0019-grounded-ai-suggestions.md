@@ -1,6 +1,6 @@
-# Current decision status (2026-10-24)
+# Current decision status (2026-11-05)
 
-AI remains disabled by default in the current source. No Gemini adapter or live provider request was added during closeout: the provider adapter is not implemented in this snapshot, and data-use/training terms were not verified for a new free provider. The `gemini` config label therefore yields a disabled reason, not an operational provider. Fake/mock tests and historical OpenAI-adapter unit coverage are not live-provider evidence.
+AI remains disabled by default. A Gemini `generateContent` adapter is now implemented for M9 grounded suggestions only; it uses the fixed Google endpoint and structured JSON output. The older per-incident analysis provider remains unavailable for Gemini. One live synthetic-data Gemini suggestion succeeded locally on 2026-11-05 (INC-0001); no Render or public-deployment request has been made. The Gemini API Free tier may use prompts and responses to improve Google products, including human review, so confidential or customer incident data must not be sent through a Free-tier key.
 
 The remainder of this ADR is retained as the original M9 design/verification record and should be read with the current-snapshot evidence boundary in `../verification/milestone-9-status.md`.
 

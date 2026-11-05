@@ -2,18 +2,19 @@
 
 Read `PROJECT_MEMORY.md` first, then inspect source. Actual command output and GitHub/browser evidence outrank stale notes. Never claim an unrun check passed; never weaken tests; preserve upstream MIT attribution, security invariants and applied migrations. Do not package `.env`, `node_modules`, generated build output or `.git`.
 
-## Current closeout state (2026-11-02)
+## Current closeout state (2026-11-05)
 
 - M1–M10 implementation is substantially complete; M1–M5 are complete. Historical unaccepted/implementation-only labels are preserved below only where they date original evidence.
 - M6: deployed on Render Free + Neon. A future live check must recheck landing and health endpoints rather than treating older 200 responses as current proof.
-- M7: Alertmanager implementation is merged. On 2026-10-26, its endpoint passed 8 synthetic live scenarios. An actual external Alertmanager sender remains unverified.
+- M7: Alertmanager implementation is merged. Synthetic scenarios passed 8/8, and on 2026-11-03 an official local Alertmanager container sent a genuine notification to Render and created Incident #6. Temporary credentials and the local test container were cleaned up.
 - M8: similar incident retrieval is implemented without AI. Preserve historical retrieval, integration and browser evidence; do not claim production or live workflow completeness beyond recorded evidence.
-- M9: grounded AI is implemented and was tested with a mock provider. AI remains disabled on the public deployment; no live AI-provider request is verified.
+- M9: Gemini grounded-suggestions adapter is implemented and locally verified. On 2026-11-05, one live synthetic incident request succeeded with `gemini-3.5-flash-lite` (INC-0001); local API tests, typecheck and build passed as recorded in `PROJECT_MEMORY.md`. Legacy AI analysis remains unavailable for Gemini. Render remains unconfigured and AI disabled there pending explicit owner approval.
 - GitHub issue/PR enrichment is implemented. Live successful retrieval is unverified; the prior live attempt returned `rate_limited`.
-- M10: service catalog and change-event correlation are implemented. On 2026-10-26, all 14 migrations—including `0013_github_issue_enrichment.sql` and `0014_service_change_context.sql`—were confirmed applied. One live change event was accepted under ID `f7441240-6bec-488e-8490-9203495824f2`, but subsequent retries returned `401`. Service-link persistence and visible correlation remain unverified.
+- M10: event `live-check-001` appeared on Incident #3 and remained visible after refresh; service-link persistence is verified. Correlation is not proof of causation.
 - Previously reported final-tree verification: CI green, 537 unit tests, 271 integration tests, smoke 20/20, and zero audit vulnerabilities. These are reported results, not evidence for any unlisted live workflow.
 - Previously reported live page loading: login, Services and GitHub pages loaded successfully. Live health endpoints and targeted Services/GitHub workflows still need fresh rechecking.
-- Realtime remains disabled on the public deployment. Two-browser live verification requires a separate direct `REALTIME_DATABASE_URL` and explicit owner approval.
+- Realtime was verified with two tabs, same browser session. This is the final evidence label; no independent-browser test will be done.
+- Backup/restore and health checks are complete. The Control Room redesign is pushed and deployed to Render; the owner approved the visual refinement. Package metadata, MIT LICENSE and README are complete.
 - Backup/restore requires a drill on disposable local PostgreSQL only.
 
 ## Remaining work
@@ -25,8 +26,8 @@ Read `PROJECT_MEMORY.md` first, then inspect source. Actual command output and G
 5. Perform the local disposable-PostgreSQL backup/restore drill.
 6. Test the actual external Alertmanager sender.
 7. Add README screenshots and the live URL; choose the project name and license; add a root LICENSE while preserving upstream `julmtoz` attribution.
-8. Review free-tier Gemini data-use terms before implementation; keep public-demo AI disabled.
-9. Complete the Control Room redesign. Six screens are designed in Claude Canvas; register/invite and incident create/edit designs remain outstanding, and no redesign implementation is verified.
+8. After explicit owner approval, optionally configure Gemini on Render and verify one synthetic suggestion. Keep Render AI disabled until then; never send confidential, customer or production incident data through the Free tier.
+9. Control Room redesign is implemented and deployed to Render (commit `3ba656f`, auto-deploy config `95a3413`); the user confirmed the approved local visual refinement.
 
 ## Current source and status
 - **Accepted Milestone 2.1:** `incident-platform-milestone2.1-windows-verified.zip` (fallback baseline).
@@ -46,7 +47,7 @@ Remaining real-time acceptance: after M6 closeout, investigate the direct Neon l
 - Secure/revocable sessions, CSRF/Origin allow-list, invitations hashed/single-use, minimum one organization owner.
 - State transitions constrained in service and DB; optimistic concurrency 409; append-only incident timeline and audit trail.
 - PostgreSQL durable queue (not Redis/BullMQ) with transactionally enqueued jobs, retries, lease fencing and poisoned-job isolation.
-- AI is optional/advisory; human applies suggestions through the audited API. No live OpenAI verification; Gemini adapter is unimplemented and remains disabled.
+- AI is optional/advisory; human applies suggestions through the audited API. Gemini is live-verified locally for M9 grounded suggestions using one synthetic incident; legacy analysis remains unavailable for Gemini, and Render has not been configured.
 - Realtime client never selects organization/room; handshake checks session cookie + browser Origin; only organization-filtered messages are broadcast; revocation/access re-check and resync must fail closed.
 - Never run `npm run services:reset`. It deletes Compose volumes. Preserve existing data and use isolated M4 containers/database.
 
