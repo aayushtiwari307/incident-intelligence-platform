@@ -11,13 +11,22 @@ services:
       - key: NODE_ENV
         value: production
       - key: AI_PROVIDER
-        value: none
+        value: gemini
       - key: AI_ENABLED
-        value: "false"
+        value: "true"
+      - key: AI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_API_KEY
+        sync: false
       - key: AI_DAILY_REQUEST_LIMIT
         value: "20"
       - key: REALTIME_ENABLED
-        value: "false"
+        value: "true"
+      - key: REALTIME_DATABASE_URL
+        sync: false
+      # Next.js inlines this flag into the browser bundle during the Docker build.
+      - key: NEXT_PUBLIC_REALTIME_ENABLED
+        value: "true"
       - key: MIGRATE_ON_START
         value: check
       - key: LOG_LEVEL

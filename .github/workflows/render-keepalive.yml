@@ -1,0 +1,27 @@
+name: Render keepalive
+
+on:
+  schedule:
+    # Run every five minutes, offset from the top of the hour to avoid peak scheduling load.
+    - cron: "2-59/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  keepalive:
+    name: Ping the Render liveness endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Keep the free web service warm
+        env:
+          HEALTH_URL: https://incident-intelligence-free-demo.onrender.com/health/live
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 90 "$HEALTH_URL")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Render liveness endpoint returned HTTP $status"
+            exit 1
+          fi
+          echo "Render liveness endpoint returned HTTP $status"
