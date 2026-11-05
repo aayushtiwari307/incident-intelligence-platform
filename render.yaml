@@ -6,7 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health/live
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
