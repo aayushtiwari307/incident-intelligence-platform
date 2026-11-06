@@ -11,7 +11,7 @@ const value = (text, key) => new RegExp(`^${key}=(.*)$`, "m").exec(text)?.[1];
 test("the real templates still contain the placeholders this script replaces", () => {
   assert.match(templates.root, /^POSTGRES_PASSWORD=dev_only_change_me$/m);
   assert.match(templates.api, /^DATABASE_URL=.*dev_only_change_me/m);
-  assert.doesNotMatch(templates.root + templates.api, /^REDIS_/m, "Redis is optional and unused: no REDIS_* line is generated");
+  assert.doesNotMatch(templates.root + templates.api, /^REDIS_/m, "Redis is optional: default setup does not generate a REDIS_* line");
 });
 
 test("passwords match between the compose .env and the API's connection URLs", () => {

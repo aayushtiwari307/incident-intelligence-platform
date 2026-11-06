@@ -12,6 +12,7 @@
     "start": "node dist/main.js",
     "test": "jest",
     "test:integration": "node ../../scripts/check-integration-db-host.mjs && jest -c jest.integration.config.js --runInBand",
+    "test:redis": "node ../../scripts/check-integration-db-host.mjs && jest -c jest.redis.config.js --runInBand",
     "migrate": "node --env-file-if-exists=.env dist/db/migrate/cli.js apply",
     "migrate:status": "node --env-file-if-exists=.env dist/db/migrate/cli.js check",
     "dev": "node scripts/dev.mjs"
@@ -23,6 +24,7 @@
     "@platform/shared": "*",
     "helmet": "8.3.0",
     "pg": "8.23.1",
+    "redis": "^6.3.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "socket.io": "4.8.4",

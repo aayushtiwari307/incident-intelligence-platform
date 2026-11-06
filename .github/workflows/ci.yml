@@ -26,6 +26,11 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/postgres
     steps:
@@ -40,6 +45,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run test:redis -w @platform/api
       - run: npm run test:integration
       - run: npm run build
       - name: Prepare local-only Compose configuration
@@ -55,7 +61,7 @@ jobs:
           docker compose --profile app config --quiet
           docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app config --quiet
 
-      # ---- Topology 1: direct (web :3000, API :3001). REDIS_URL is NOT set: the API must not need Redis. ----
+      # ---- Topology 1: direct (web :3000, API :3001). REDIS_URL is NOT set: the API must not use Redis. ----
       - name: Build and start the complete container stack
         run: docker compose --profile app up -d --build --wait
       - name: Application containers run as a non-root user
@@ -65,7 +71,7 @@ jobs:
             echo "$service runs as uid $uid"
             test "$uid" != "0"
           done
-      - name: Smoke-test the running stack (HTTP + WebSocket; Redis absent)
+      - name: Smoke-test the running stack (HTTP + WebSocket; REDIS_URL unset)
         run: npm run smoke:stack
       - name: Negative control - the smoke test must FAIL when real-time is disabled
         run: |
@@ -77,9 +83,9 @@ jobs:
           fi
           echo "$output" | grep -q "FAIL realtime:" || { echo "$output"; echo "NEGATIVE CONTROL FAILED: smoke failed, but not at a realtime check"; exit 1; }
           echo "negative control OK: the smoke test detects disabled real-time"
-      - name: REDIS_URL present (pointing nowhere) changes nothing - the API never connects to Redis
+      - name: Smoke-test the stack with the Compose Redis service configured
         run: |
-          REDIS_URL=redis://:unused@127.0.0.1:6379 docker compose --profile app up -d --wait api
+          REDIS_URL=redis://redis:6379 docker compose --profile app up -d --wait api
           npm run smoke:stack
       - name: Container logs (only when something failed)
         if: failure()

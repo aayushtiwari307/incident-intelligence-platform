@@ -24,6 +24,8 @@ import { OrganizationService } from "../organizations/organization.service";
 import { ApiHandlers } from "./api-handlers";
 import { AiSettingsController, AuthController, IncidentController, IntegrationController, IntegrationWebhookController, OrganizationController, WEBHOOK_BODY_LIMIT, GithubSettingsController, IncidentGithubController, ServicesController, IncidentServiceContextController } from "./api.controllers";
 import { SlidingWindowLimiter } from "./rate-limiter";
+import { RedisConnectionProvider } from "./redis-connection";
+import { RedisRateLimiter, ResilientRedisRateLimiter, type RateLimitPolicy } from "./redis-rate-limiter";
 import { RealtimeHub } from "../realtime/hub";
 import { GithubIssueService } from "../github/github-issue.service";
 import { ServiceCatalogService } from "../services/service-catalog.service";
@@ -35,7 +37,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const ONE_MINUTE = 60 * 1000;
 
-// Webhook limits (per API process; see docs/integrations/alertmanager.md for what in-memory limiting does and does not give).
+// Alertmanager limits; each policy uses Redis when configured and its declared in-memory outage policy otherwise.
 const WEBHOOK_IP_LIMIT_PER_MINUTE = 600;
 const WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES = 20;
 const WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE = 300;
@@ -48,16 +50,40 @@ export const OPENAI_FETCH = Symbol("OPENAI_FETCH");
 const ANALYSIS_PROVIDER = Symbol("ANALYSIS_PROVIDER");
 const SUGGESTION_PROVIDER = Symbol("SUGGESTION_PROVIDER");
 
-// Grounded-AI generate requests per user (and organization): a burst guard on top of the atomic daily quota.
+// Grounded-AI generate requests per user across all organizations: a burst guard on top of the atomic daily quota.
 const AI_USER_LIMIT_PER_10_MINUTES = 5;
 
-/**
- * Wires the framework-free services to Nest. Rate limiters are in process memory: correct for a single API
- * instance, per-instance (so effectively looser) when scaled out. Moving them to Redis is the planned fix (ADR 0010).
- */
+function configuredLimiter(
+  redis: RedisConnectionProvider,
+  memory: SlidingWindowLimiter,
+  limit: number,
+  windowMs: number,
+  policy: RateLimitPolicy,
+  failurePolicy: "fail-open" | "fail-closed",
+  log: ReturnType<typeof createLogger>,
+) {
+  if (!redis.isConfigured()) return memory;
+  return new ResilientRedisRateLimiter(
+    new RedisRateLimiter(
+      () => redis.getClient(),
+      limit,
+      windowMs,
+      policy,
+      undefined,
+      (client) => redis.retireClient(client),
+    ),
+    memory,
+    failurePolicy,
+    60,
+    (operation) => log.warn("rate limiter is using its outage policy", { policy, operation }),
+  );
+}
+
+/** Wires framework-free services to Nest and configures Redis-backed limiters with an in-memory fallback policy. */
 @Module({
   controllers: [AuthController, OrganizationController, IncidentController, AiSettingsController, IntegrationController, IntegrationWebhookController, GithubSettingsController, IncidentGithubController, ServicesController, IncidentServiceContextController],
   providers: [
+    RedisConnectionProvider,
     { provide: OPENAI_FETCH, useValue: fetch },
     {
       provide: ANALYSIS_PROVIDER,
@@ -72,14 +98,16 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
     },
     {
       provide: AuthService,
-      inject: [DatabaseService, APP_CONFIG],
-      useFactory: (db: DatabaseService, config: AppConfig) =>
-        new AuthService(db.database, new PasswordHasher(), {
+      inject: [DatabaseService, APP_CONFIG, RedisConnectionProvider],
+      useFactory: (db: DatabaseService, config: AppConfig, redis: RedisConnectionProvider) => {
+        const log = createLogger(config.logLevel);
+        return new AuthService(db.database, new PasswordHasher(), {
           sessionTtlSeconds: config.auth.sessionTtlSeconds,
-          loginIpLimiter: new SlidingWindowLimiter(100, FIFTEEN_MINUTES),
-          loginAccountLimiter: new SlidingWindowLimiter(5, FIFTEEN_MINUTES),
-          registerIpLimiter: new SlidingWindowLimiter(REGISTER_IP_LIMIT, ONE_HOUR),
-        }),
+          loginIpLimiter: configuredLimiter(redis, new SlidingWindowLimiter(100, FIFTEEN_MINUTES), 100, FIFTEEN_MINUTES, "login-ip", "fail-closed", log),
+          loginAccountLimiter: configuredLimiter(redis, new SlidingWindowLimiter(5, FIFTEEN_MINUTES), 5, FIFTEEN_MINUTES, "login-account", "fail-closed", log),
+          registerIpLimiter: configuredLimiter(redis, new SlidingWindowLimiter(REGISTER_IP_LIMIT, ONE_HOUR), REGISTER_IP_LIMIT, ONE_HOUR, "register-ip", "fail-closed", log),
+        });
+      },
     },
     {
       provide: OrganizationService,
@@ -95,14 +123,16 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
     },
     {
       provide: AiSuggestionService,
-      inject: [DatabaseService, JobQueue, APP_CONFIG, SUGGESTION_PROVIDER],
-      useFactory: (db: DatabaseService, queue: JobQueue, config: AppConfig, provider: SuggestionProvider | null) =>
-        new AiSuggestionService(db.database, queue, {
+      inject: [DatabaseService, JobQueue, APP_CONFIG, SUGGESTION_PROVIDER, RedisConnectionProvider],
+      useFactory: (db: DatabaseService, queue: JobQueue, config: AppConfig, provider: SuggestionProvider | null, redis: RedisConnectionProvider) => {
+        const log = createLogger(config.logLevel);
+        return new AiSuggestionService(db.database, queue, {
           // No provider object means no feature: the switch, the key and the provider kind are all folded into this.
           serverEnabled: provider !== null,
           dailyLimit: config.ai.suggestions.dailyRequestLimit,
-          userLimiter: new SlidingWindowLimiter(AI_USER_LIMIT_PER_10_MINUTES, 10 * ONE_MINUTE),
-        }),
+          userLimiter: configuredLimiter(redis, new SlidingWindowLimiter(AI_USER_LIMIT_PER_10_MINUTES, 10 * ONE_MINUTE), AI_USER_LIMIT_PER_10_MINUTES, 10 * ONE_MINUTE, "ai-user", "fail-closed", log),
+        });
+      },
     },
     {
       provide: IncidentService,
@@ -122,13 +152,13 @@ const AI_USER_LIMIT_PER_10_MINUTES = 5;
     },
     {
       provide: AlertWebhookHandlers,
-      inject: [AlertIngestionService, APP_CONFIG],
-      useFactory: (ingestion: AlertIngestionService, config: AppConfig) => {
+      inject: [AlertIngestionService, APP_CONFIG, RedisConnectionProvider],
+      useFactory: (ingestion: AlertIngestionService, config: AppConfig, redis: RedisConnectionProvider) => {
         const log = createLogger(config.logLevel);
         return new AlertWebhookHandlers(ingestion, {
-          ipLimiter: new SlidingWindowLimiter(WEBHOOK_IP_LIMIT_PER_MINUTE, ONE_MINUTE),
-          failedAuthLimiter: new SlidingWindowLimiter(WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES, 5 * ONE_MINUTE),
-          integrationLimiter: new SlidingWindowLimiter(WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE, ONE_MINUTE),
+          ipLimiter: configuredLimiter(redis, new SlidingWindowLimiter(WEBHOOK_IP_LIMIT_PER_MINUTE, ONE_MINUTE), WEBHOOK_IP_LIMIT_PER_MINUTE, ONE_MINUTE, "alertmanager-ip", "fail-open", log),
+          failedAuthLimiter: configuredLimiter(redis, new SlidingWindowLimiter(WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES, 5 * ONE_MINUTE), WEBHOOK_FAILED_AUTH_LIMIT_PER_5_MINUTES, 5 * ONE_MINUTE, "webhook-failed-auth", "fail-closed", log),
+          integrationLimiter: configuredLimiter(redis, new SlidingWindowLimiter(WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE, ONE_MINUTE), WEBHOOK_INTEGRATION_LIMIT_PER_MINUTE, ONE_MINUTE, "alertmanager-integration", "fail-open", log),
           log,
         });
       },

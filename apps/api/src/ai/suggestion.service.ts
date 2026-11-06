@@ -18,7 +18,7 @@ import { authorize } from "../common/authz";
 import { AppError, PG, conflict, notFound, pgCode, rateLimited, validationFailed } from "../common/errors";
 import type { Database, SqlClient } from "../common/sql";
 import { iso, num } from "../common/sql-helpers";
-import type { SlidingWindowLimiter } from "../http/rate-limiter";
+import type { RateLimiter } from "../http/rate-limiter";
 import type { JobQueue } from "../jobs/job-queue";
 import { GENERATE_AI_SUGGESTION_JOB, SUGGESTION_JOB_MAX_ATTEMPTS } from "./suggestion.handler";
 import { composeCommentDraft } from "./suggestion-output";
@@ -29,8 +29,8 @@ export interface AiSuggestionServiceOptions {
   serverEnabled: boolean;
   /** Requests per organization per UTC day. */
   dailyLimit: number;
-  /** Per (organization, user) rate limit on generate requests. In process memory, like every limiter in this API. */
-  userLimiter: SlidingWindowLimiter;
+  /** Global per-user rate limit on generate requests across all organizations. */
+  userLimiter: RateLimiter;
 }
 
 type AuditType = "ai_settings_changed" | "suggestion_requested" | "suggestion_applied" | "suggestion_dismissed";
@@ -141,7 +141,7 @@ export class AiSuggestionService {
   }
 
   /**
-   * Queues ONE generation. Order matters: role, server switch, organization opt-in, per-user rate limit, then ONE
+   * Queues ONE generation. Order matters: role, server switch, organization opt-in, global per-user rate limit, then ONE
    * transaction that reserves quota, creates the suggestion and its job, and writes the audit entry. Either all of it
    * happens or none of it does, so quota is charged exactly once per logical request and never for a rejected one.
    */
@@ -149,7 +149,7 @@ export class AiSuggestionService {
     const organizationId = authorize(auth, "aiSuggestion:use");
     if (!this.options.serverEnabled) throw featureDisabled("server_disabled", "AI suggestions are not enabled on this server");
 
-    const limit = this.options.userLimiter.consume(`${organizationId}:${auth.userId}`);
+    const limit = await this.options.userLimiter.consume(auth.userId);
     if (!limit.allowed) throw rateLimited(limit.retryAfterSeconds);
 
     try {

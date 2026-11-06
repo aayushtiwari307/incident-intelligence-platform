@@ -64,8 +64,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)),
   // Optional dedicated session connection for LISTEN/NOTIFY; defaults to DATABASE_URL.
   REALTIME_DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)).optional(),
-  // Optional: nothing in the API connects to Redis (the job queue and real-time layer use PostgreSQL only). It is still
-  // validated when present, so a typo is reported instead of silently ignored.
+  // Optional Redis backend for distributed rate limiting. The job queue and real-time layer remain PostgreSQL-backed.
   REDIS_URL: z.string().superRefine(urlWithProtocols(["redis:", "rediss:"], false)).optional(),
   TRUST_PROXY: z.string().optional(),
   TRUST_PROXY_HOPS: envInt(0, 10).optional(),
@@ -131,7 +130,7 @@ export interface AppConfig {
   };
   auth: { sessionTtlSeconds: number; inviteTtlSeconds: number; publicRegistrationEnabled: boolean };
   database: { url: Secret; realtimeUrl?: Secret; poolMax: number; connectTimeoutMs: number; statementTimeoutMs: number };
-  /** null when REDIS_URL is not set (the normal case). Reserved: no code reads it today. */
+  /** null when REDIS_URL is not set; startup and ordinary tests do not require Redis. */
   redis: { url: Secret } | null;
   migrations: { mode: MigrateOnStart };
   logLevel: LogLevel;

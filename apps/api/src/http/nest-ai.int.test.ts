@@ -89,7 +89,6 @@ describe("Nest HTTP to PostgreSQL queue to mocked OpenAI end-to-end", () => {
       API_HOST: "127.0.0.1",
       API_PORT: "3001",
       DATABASE_URL: testDb.connectionString,
-      REDIS_URL: "redis://127.0.0.1:6380",
       CORS_ORIGINS: ORIGIN,
       TRUST_PROXY_HOPS: "0",
       MIGRATE_ON_START: "off",

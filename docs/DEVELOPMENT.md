@@ -1,6 +1,6 @@
 # Development setup on Windows (CMD and PowerShell)
 
-> **Milestone 5 (2026-10-14):** Redis is no longer part of the stack; the web/API can also run behind a local single-origin proxy (see "Single-origin proxy topology"). M5 paths are unverified until run on Windows/CI.
+> Redis is an optional service used for distributed rate limiting. The web/API can also run behind a local single-origin proxy (see "Single-origin proxy topology").
 >
 > Native development and test commands were verified on Windows against Milestone 2.1. Milestone 3 adds a true Nest E2E test and production container path; those newly added paths remain unverified until they pass locally/CI. If a step behaves differently, report the exact command and result.
 
@@ -54,7 +54,7 @@ Edited the passwords by hand later? Keep the root `.env` and `apps/api/.env` in 
 npm run services:up
 ```
 
-Waits until the container is healthy. Check: `docker compose ps` shows `healthy` for `postgres`. (An old `redis` container from before M5 may linger; `docker compose up` warns about orphans and it is harmless. `REDIS_URL` is optional and unused.)
+Waits until the container is healthy. Check: `docker compose ps` shows `healthy` for `postgres`. The Redis service is also available on loopback port 6380, but the API does not connect unless `REDIS_URL` is configured. For distributed rate limiting, set `REDIS_URL=redis://127.0.0.1:6380` in the API environment.
 Stop with `npm run services:down` (data is kept in Docker volumes).
 
 ## 4. Start the API (terminal 1)
@@ -196,7 +196,7 @@ docker compose -f docker-compose.yml -f docker-compose.edge.yml --profile app up
 
 Replace the example with the actual tunnel URL (scheme and hostname only, no path). No web rebuild is needed when the tunnel hostname changes. If you change `EDGE_PORT`, also set `PUBLIC_ORIGIN` to the corresponding local origin. The proxy speaks plain HTTP internally; the public tunnel supplies HTTPS. Keep `TRUST_PROXY_HOPS=0` whenever nothing sits in front of the API.
 
-Optional: `REDIS_URL` may be set but nothing uses it. Negative control for the realtime checks: start the API with `REALTIME_ENABLED=false` and run `npm run smoke:stack`; it must fail at a `realtime:` check.
+Optional: set `REDIS_URL=redis://127.0.0.1:6380` for Redis-backed distributed rate limiting; with it unset, the API uses in-memory rate limiters. Negative control for the realtime checks: start the API with `REALTIME_ENABLED=false` and run `npm run smoke:stack`; it must fail at a `realtime:` check.
 
 ## Alertmanager integration (Milestone 7)
 
@@ -207,7 +207,7 @@ Apply migration 0007 (`npm run migrate`, or restart the API with `MIGRATE_ON_STA
 | `set ALERTMANAGER_SIM_TOKEN=YOUR_TOKEN` | `$env:ALERTMANAGER_SIM_TOKEN = "YOUR_TOKEN"` |
 | `npm run simulate:alertmanager -- --base-url http://127.0.0.1:8080` | same |
 
-Without the edge proxy use the API address, `http://127.0.0.1:3001`. Optional env: `WEBHOOK_BODY_LIMIT_BYTES` (default 1048576). Webhook rate limits are in memory, per process. The M7 integration tests need the same `TEST_DATABASE_URL` as the other integration tests. Full guide: `docs/integrations/alertmanager.md`.
+Without the edge proxy use the API address, `http://127.0.0.1:3001`. Optional env: `WEBHOOK_BODY_LIMIT_BYTES` (default 1048576). Webhook rate limits use Redis when `REDIS_URL` is configured; the IP and per-integration policies fall back to process-local memory during Redis outages, while failed authentication fails closed. The M7 integration tests need the same `TEST_DATABASE_URL` as the other integration tests. Full guide: `docs/integrations/alertmanager.md`.
 
 ## Troubleshooting
 

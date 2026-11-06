@@ -4,14 +4,29 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+export class RateLimiterUnavailableError extends Error {
+  constructor() {
+    super("Rate limiter backend unavailable");
+    this.name = "RateLimiterUnavailableError";
+  }
+}
+
+export interface RateLimiter {
+  consume(key: string): Promise<RateLimitResult>;
+  peek(key: string): Promise<RateLimitResult>;
+  reset(key: string): Promise<void>;
+  /** Optional availability-aware preflight used by authentication gates. */
+  peekStrict?(key: string): Promise<RateLimitResult>;
+}
+
 /**
  * Sliding-window limiter held in process memory.
  *
  * Limitation, stated plainly: the counters live in one Node process. With several API instances each has its
- * own counters, so the effective limit is multiplied. A Redis-backed limiter replaces this in Phase 4, when
- * Redis becomes a runtime dependency. Memory is bounded: at most `maxKeys` keys are tracked, oldest first out.
+ * own counters, so the effective limit is multiplied. Redis-backed limiting is selected only when REDIS_URL is set.
+ * Memory is bounded: at most `maxKeys` keys are tracked, oldest first out.
  */
-export class SlidingWindowLimiter {
+export class SlidingWindowLimiter implements RateLimiter {
   private readonly hits = new Map<string, number[]>();
 
   constructor(
@@ -22,7 +37,7 @@ export class SlidingWindowLimiter {
   ) {}
 
   /** Records one attempt for `key` and says whether it is allowed. Rejected attempts are not counted again. */
-  consume(key: string): RateLimitResult {
+  async consume(key: string): Promise<RateLimitResult> {
     const now = this.now();
     const windowStart = now - this.windowMs;
     const recent = (this.hits.get(key) ?? []).filter((t) => t > windowStart);
@@ -39,7 +54,7 @@ export class SlidingWindowLimiter {
   }
 
   /** Says whether `key` is over the limit right now WITHOUT counting an attempt (used to gate on past failures). */
-  peek(key: string): RateLimitResult {
+  async peek(key: string): Promise<RateLimitResult> {
     const now = this.now();
     const recent = (this.hits.get(key) ?? []).filter((t) => t > now - this.windowMs);
     if (recent.length >= this.limit) {
@@ -49,7 +64,7 @@ export class SlidingWindowLimiter {
   }
 
   /** Forget a key (e.g. after a successful login so honest users are not penalised for earlier typos). */
-  reset(key: string): void {
+  async reset(key: string): Promise<void> {
     this.hits.delete(key);
   }
 

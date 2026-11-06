@@ -162,6 +162,30 @@ describe("grounded AI suggestions (real PostgreSQL, fake provider only)", () => 
     assert.equal(await count("jobs"), 1);
   });
 
+  it("the burst budget is global per user across different organizations", async () => {
+    app = await createTestApp({ suggestionProvider: new FakeSuggestionProvider(), aiUserLimit: 1 });
+    const organizationA = await app.register("global-a-owner@example.com", "Organization A");
+    const organizationB = await app.register("global-b-owner@example.com", "Organization B");
+    const member = await app.register("global-ai-member@example.com", "Personal organization");
+
+    await app.aiSuggestions.updateSettings(organizationA.auth, { suggestionsEnabled: true });
+    await app.aiSuggestions.updateSettings(organizationB.auth, { suggestionsEnabled: true });
+
+    const inviteA = await app.organizations.createInvite(organizationA.auth, { email: member.auth.email, role: "responder" });
+    const acceptedA = await app.organizations.acceptInvite(member.auth, { token: inviteA.token });
+    const inviteB = await app.organizations.createInvite(organizationB.auth, { email: member.auth.email, role: "responder" });
+    const acceptedB = await app.organizations.acceptInvite(member.auth, { token: inviteB.token });
+    const memberA = { ...member.auth, organizationId: acceptedA.organizationId, role: acceptedA.role };
+    const memberB = { ...member.auth, organizationId: acceptedB.organizationId, role: acceptedB.role };
+
+    const incidentA = await app.incidents.create(organizationA.auth, NEW);
+    const incidentB = await app.incidents.create(organizationB.auth, { ...NEW, title: "Organization B incident" });
+    await app.aiSuggestions.request(memberA, incidentA.id);
+    const blocked = await appError(app.aiSuggestions.request(memberB, incidentB.id));
+    assert.equal(blocked.code, "RATE_LIMITED");
+    assert.equal(await used(), 1, "the second organization did not receive a separate burst allowance");
+  });
+
   it("the per-user rate limit applies before any charge", async () => {
     app = await createTestApp({ suggestionProvider: new FakeSuggestionProvider(), aiUserLimit: 1 });
     owner = await app.register("limit@example.com");

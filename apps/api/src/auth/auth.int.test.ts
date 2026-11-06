@@ -220,6 +220,25 @@ describe("authentication (real PostgreSQL)", () => {
     }
   });
 
+  it("a successful login clears only the account+IP counter", async () => {
+    await app.close();
+    app = await createTestApp({ limits: { loginIp: 2, loginAccount: 2, registerIp: 3 } });
+    await app.register("reset-account@example.com");
+
+    assert.equal((await appError(app.auth.login(
+      { email: "reset-account@example.com", password: "wrong-one" },
+      meta,
+    ))).code, "UNAUTHENTICATED");
+
+    await app.auth.login(
+      { email: "reset-account@example.com", password: PASSWORD },
+      meta,
+    );
+
+    assert.equal((await app.limiters.loginAccount.peek(`reset-account@example.com|${meta.ip}`)).allowed, true);
+    assert.equal((await app.limiters.loginIp.peek(meta.ip)).allowed, false);
+  });
+
   it("throttles registrations per IP", async () => {
     for (let i = 0; i < 3; i++) await app.register(`user${i}@example.com`);
     // app.register uses a fixed IP; the 4th from the same address is refused

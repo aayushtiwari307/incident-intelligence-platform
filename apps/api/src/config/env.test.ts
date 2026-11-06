@@ -309,7 +309,7 @@ describe("secrets cannot leak through serialisation", () => {
   });
 });
 
-describe("REDIS_URL is optional (no code connects to Redis)", () => {
+describe("REDIS_URL is optional for startup and ordinary tests", () => {
   const withoutRedis = (extra: Record<string, string | undefined> = {}) => ({ DATABASE_URL: base().DATABASE_URL, ...extra });
 
   it("loads without REDIS_URL and reports no Redis configuration", () => {
