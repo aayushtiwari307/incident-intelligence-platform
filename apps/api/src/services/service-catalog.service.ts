@@ -177,15 +177,16 @@ export class ServiceCatalogService {
 
   /** Handles change-event integration auth and commit. The raw bearer token never reaches logs or persistent storage. */
   async ingestChange(token: string, ip: string, readJson: () => Promise<unknown>): Promise<{ accepted: true; duplicate: boolean; changeEventId: string }> {
-    const ipGate = this.ipLimiter.consume(ip);
+    const ipGate = await this.ipLimiter.consume(ip);
     if (!ipGate.allowed) throw rateLimited(ipGate.retryAfterSeconds);
-    if (!this.failedAuthLimiter.peek(ip).allowed) throw rateLimited(this.failedAuthLimiter.peek(ip).retryAfterSeconds);
+    const failures = await this.failedAuthLimiter.peek(ip);
+    if (!failures.allowed) throw rateLimited(failures.retryAfterSeconds);
     const credential = await this.lookupChangeIntegration(token);
     if (!credential) {
-      this.failedAuthLimiter.consume(ip);
+      await this.failedAuthLimiter.consume(ip);
       throw new AppError("UNAUTHENTICATED", "Invalid or revoked change-event credentials", { headers: { "WWW-Authenticate": 'Bearer realm="change-events"' } });
     }
-    const integrationGate = this.integrationLimiter.consume(credential.id);
+    const integrationGate = await this.integrationLimiter.consume(credential.id);
     if (!integrationGate.allowed) throw new AppError("SERVICE_UNAVAILABLE", "Too many requests; retry after the indicated delay", { headers: { "Retry-After": String(integrationGate.retryAfterSeconds) } });
     const raw = await readJson();
     const parsed = changeEventInputSchema.safeParse(raw);

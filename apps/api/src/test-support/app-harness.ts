@@ -17,8 +17,8 @@ import { JobQueue } from "../jobs/job-queue";
 import { JobWorker } from "../jobs/job-worker";
 import { IncidentService } from "../incidents/incident.service";
 import { OrganizationService } from "../organizations/organization.service";
-import { SlidingWindowLimiter } from "../http/rate-limiter";
 import { ApiHandlers } from "../http/api-handlers";
+import { SlidingWindowLimiter, type RateLimiter } from "../http/rate-limiter";
 import { createTestDatabase, type TestDatabase } from "./session-factory";
 
 export const PASSWORD = "correct horse battery staple";
@@ -50,7 +50,7 @@ export interface TestApp {
   worker: JobWorker | null;
   /** Builds another worker (to prove concurrent workers never double-process). */
   newWorker(workerId: string): JobWorker;
-  limiters: { loginIp: SlidingWindowLimiter; loginAccount: SlidingWindowLimiter; registerIp: SlidingWindowLimiter };
+  limiters: { loginIp: RateLimiter; loginAccount: RateLimiter; registerIp: RateLimiter };
   /** Registers a user (who becomes owner of a new organization) and returns their authenticated context. */
   register(email: string, organizationName?: string, displayName?: string): Promise<RegisteredUser>;
   /** Registers a user, then makes them a member of `owner`'s organization with `role` via the real invite flow. */
@@ -60,6 +60,8 @@ export interface TestApp {
 
 export interface TestAppOptions {
   limits?: { loginIp?: number; loginAccount?: number; registerIp?: number };
+  /** Inject Redis-backed authentication limiters into the real AuthService stack. */
+  authRateLimiters?: { loginIp: RateLimiter; loginAccount: RateLimiter; registerIp: RateLimiter };
   sessionTtlSeconds?: number;
   /** Supplying a provider turns the AI feature on (otherwise it is off, like AI_PROVIDER=none). */
   provider?: AnalysisProvider;
@@ -82,7 +84,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   await runMigrations(testDb.connect, { mode: "apply", directory: path.resolve(__dirname, "../../migrations") });
 
   const database = new Database(testDb.pool);
-  const limiters = {
+  const limiters = options.authRateLimiters ?? {
     loginIp: new SlidingWindowLimiter(options.limits?.loginIp ?? 10_000, 900_000),
     loginAccount: new SlidingWindowLimiter(options.limits?.loginAccount ?? 10_000, 900_000),
     registerIp: new SlidingWindowLimiter(options.limits?.registerIp ?? 10_000, 900_000),

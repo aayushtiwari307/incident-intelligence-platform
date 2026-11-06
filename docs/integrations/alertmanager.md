@@ -1,6 +1,6 @@
 # Alertmanager integration (Milestone 7)
 
-`POST /api/v1/integrations/alertmanager` accepts standard Prometheus Alertmanager **webhook v4** notifications and turns them into incidents, with deduplication. No paid service, Redis or AI is involved.
+`POST /api/v1/integrations/alertmanager` accepts standard Prometheus Alertmanager **webhook v4** notifications and turns them into incidents, with deduplication. No paid service or AI provider is required. Redis is optional and is used only when configured for distributed rate limiting.
 
 ## 1. Credentials
 
@@ -106,15 +106,17 @@ Oversize returns 413 deliberately: it is deterministic, retrying cannot succeed,
 
 If Alertmanager's `max_alerts` is non-zero and a group has more alerts, it sends only the first N and sets `truncatedAlerts`. Applying a partial notification would silently lose alerts (and a partial resolve would be wrong), so the API refuses it with 503 `ALERTS_TRUNCATED` and creates nothing. Remedy: set `max_alerts: 0` **and** make groups at most 50 alerts with a finer `group_by` (for example `[alertname, instance]`; `group_by: ['...']` disables grouping entirely). Groups above 50 alerts are rejected with 413.
 
-## 7. Rate limits (per process, in memory)
+## 7. Rate limits
 
-Counters live in the API process and reset on restart; with several API instances each has its own budget (no Redis by design). Limits: 600 requests/minute per client IP; 20 failed credential attempts per 5 minutes per IP (then 503 before any database lookup); 300 deliveries/minute per integration. Behind a proxy set `TRUST_PROXY_HOPS` correctly or every client shares one IP bucket.
+When `REDIS_URL` is unset, counters are process-local and reset on restart; with several API instances each has its own budget. When configured, Redis provides shared counters with a separate key namespace for each policy and Redis-server time for the sliding window. Redis is optional for application startup.
+
+Alertmanager limits are 600 requests/minute per client IP, 20 failed credential attempts per 5 minutes per IP, and 300 deliveries/minute per integration. During a Redis outage, the IP and integration limits fall back to process-local memory. Valid integration credentials are not rejected solely because the failed-authentication Redis preflight is unavailable. Invalid credentials still fail closed (503) when the failed-authentication counter cannot be checked or incremented. With healthy Redis, an exhausted failed-authentication budget is rejected before credential lookup. Behind a proxy set `TRUST_PROXY_HOPS` correctly or every client shares one IP bucket.
 
 ## 8. Known limitations
 
 - A first-seen `resolved` notification is stored as a tombstone with no incident. Later deliveries for the same `(integration, fingerprint, startsAt)` stay deduplicated; a different `startsAt` is a new cycle.
 - Only Alertmanager v4 is supported; there is no per-integration routing, no label-based grouping of different alerts into one incident, and no retention job for `alert_cycles`. Tombstones share the same retention characteristics as other cycle rows.
-- Rate limits are not distributed.
+- With `REDIS_URL` configured, Alertmanager rate-limit counters are shared through Redis. With it unset, limits are process-local; during Redis outages the IP and integration policies use process-local fallback.
 - Edge limits: `deploy/edge/Caddyfile` sets no request body limit; the API enforces its own.
 
 ## 9. Local simulator

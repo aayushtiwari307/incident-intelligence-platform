@@ -365,9 +365,9 @@ export class GithubIssueService {
     const nowMs = this.now().getTime();
     const budgetGate = this.githubBudget.check(nowMs);
     if (!budgetGate.ok) return { status: 429, etag: null, rateLimited: true };
-    const orgGate = this.orgLimiter.consume(org);
+    const orgGate = await this.orgLimiter.consume(org);
     if (!orgGate.allowed) return { status: 429, etag: null, rateLimited: true };
-    const processGate = this.processLimiter.consume("github-api");
+    const processGate = await this.processLimiter.consume("github-api");
     if (!processGate.allowed) return { status: 429, etag: null, rateLimited: true };
     const acquireGate = this.githubBudget.tryAcquire(nowMs);
     if (!acquireGate.ok) return { status: 429, etag: null, rateLimited: true };

@@ -10,9 +10,9 @@ import {
   type LoginInput,
 } from "@platform/shared";
 import { randomBytes } from "node:crypto";
-import { PG, conflict, forbidden, notFound, pgCode, rateLimited, unauthenticated, validationFailed } from "../common/errors";
+import { PG, conflict, forbidden, notFound, pgCode, rateLimited, serviceUnavailable, unauthenticated, validationFailed } from "../common/errors";
 import type { Database, SqlClient } from "../common/sql";
-import type { SlidingWindowLimiter } from "../http/rate-limiter";
+import type { RateLimiter } from "../http/rate-limiter";
 import type { PasswordHasher } from "./password";
 import { generateToken, hashToken } from "./tokens";
 
@@ -39,10 +39,10 @@ export interface SessionState {
 export interface AuthServiceOptions {
   sessionTtlSeconds: number;
   /** Limits login attempts per client IP (all accounts). */
-  loginIpLimiter: SlidingWindowLimiter;
+  loginIpLimiter: RateLimiter;
   /** Limits login attempts per (account, IP) pair, so an attacker cannot lock a victim out from other addresses. */
-  loginAccountLimiter: SlidingWindowLimiter;
-  registerIpLimiter: SlidingWindowLimiter;
+  loginAccountLimiter: RateLimiter;
+  registerIpLimiter: RateLimiter;
 }
 
 export interface RequestMeta {
@@ -79,7 +79,7 @@ export class AuthService {
     if (!parsed.success) throw validationFailed(parsed.error);
     const input: RegisterInput = parsed.data;
 
-    const gate = this.options.registerIpLimiter.consume(meta.ip);
+    const gate = await this.options.registerIpLimiter.consume(meta.ip);
     if (!gate.allowed) throw rateLimited(gate.retryAfterSeconds);
 
     const passwordHash = await this.hasher.hash(input.password);
@@ -123,7 +123,7 @@ export class AuthService {
     if (!parsed.success) throw validationFailed(parsed.error);
     const input: RegisterWithInviteInput = parsed.data;
 
-    const gate = this.options.registerIpLimiter.consume(meta.ip);
+    const gate = await this.options.registerIpLimiter.consume(meta.ip);
     if (!gate.allowed) throw rateLimited(gate.retryAfterSeconds);
 
     const passwordHash = await this.hasher.hash(input.password);
@@ -175,10 +175,10 @@ export class AuthService {
     const input: LoginInput = parsed.data;
 
     // Throttle BEFORE doing any expensive hashing.
-    const ipGate = this.options.loginIpLimiter.consume(meta.ip);
+    const ipGate = await this.options.loginIpLimiter.consume(meta.ip);
     if (!ipGate.allowed) throw rateLimited(ipGate.retryAfterSeconds);
     const accountKey = `${input.email}|${meta.ip}`;
-    const accountGate = this.options.loginAccountLimiter.consume(accountKey);
+    const accountGate = await this.options.loginAccountLimiter.consume(accountKey);
     if (!accountGate.allowed) throw rateLimited(accountGate.retryAfterSeconds);
 
     const found = await this.db.query<{ id: string; password_hash: string; disabled: string | null }>(
@@ -191,7 +191,13 @@ export class AuthService {
     const valid = user ? await this.hasher.verify(input.password, user.password_hash) : await this.hasher.verifyDummy(input.password);
     if (!user || user.disabled !== null || !valid) throw unauthenticated(GENERIC_LOGIN_FAILURE);
 
-    this.options.loginAccountLimiter.reset(accountKey);
+    try {
+      // Do not issue a session if the authoritative Redis counter could not be reset. The counter is retained
+      // and will expire naturally; the caller receives a retryable 503 rather than a misleading successful login.
+      await this.options.loginAccountLimiter.reset(accountKey);
+    } catch {
+      throw serviceUnavailable(60, "Sign-in is temporarily unavailable; please retry shortly");
+    }
 
     if (this.hasher.needsRehash(user.password_hash)) {
       // Upgrade old hashes transparently; failure to do so must not block the login.
@@ -317,4 +323,3 @@ export class AuthService {
     };
   }
 }
-

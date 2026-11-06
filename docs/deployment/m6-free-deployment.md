@@ -20,7 +20,7 @@ This single origin preserves the existing HttpOnly session-cookie behavior. The 
 
 `AI_PROVIDER=none` disables AI without needing a provider key. With AI disabled, the API does not start the job worker. `REALTIME_ENABLED=false` prevents the persistent PostgreSQL `LISTEN` connection and Socket.IO service. The web bundle disables Socket.IO and refreshes incident state through REST immediately and every 30 seconds.
 
-`REDIS_URL` is optional and unused: there is no Redis client or Redis-backed feature in the API.
+`REDIS_URL` is optional and enables Redis-backed distributed rate limiting. It is not configured in the current Render deployment; with it unset, the API uses its in-memory rate limiters.
 
 ## Current free-plan limitations (checked 2026-10-18)
 

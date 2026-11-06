@@ -11,7 +11,7 @@ export class HealthController {
     return { status: "ok" };
   }
 
-  /** Ready to take traffic: the database answers. Redis is not used by the API, so it is not checked; add it here if that ever changes. */
+  /** Readiness reflects the database. Redis is optional for startup; configured limiter outages follow per-policy fail-open/closed behavior. */
   @Get("ready")
   async ready() {
     try {

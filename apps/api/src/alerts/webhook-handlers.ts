@@ -1,7 +1,7 @@
 import { AppError, serviceUnavailable } from "../common/errors";
 import type { Logger } from "../common/logger";
 import type { HttpRequest, HttpResult } from "../http/http-types";
-import type { SlidingWindowLimiter } from "../http/rate-limiter";
+import { RateLimiterUnavailableError, type RateLimiter } from "../http/rate-limiter";
 import { AlertIngestionService, toRetryableFailure } from "./alert-ingestion.service";
 import { parseAlertmanagerPayload } from "./alertmanager-payload";
 
@@ -15,11 +15,11 @@ export interface WebhookRequest {
 
 export interface WebhookHandlersOptions {
   /** Every request, per client address, checked before any database work. */
-  ipLimiter: SlidingWindowLimiter;
+  ipLimiter: RateLimiter;
   /** Failed credential attempts per client address. Gates the credential lookup once exceeded. */
-  failedAuthLimiter: SlidingWindowLimiter;
+  failedAuthLimiter: RateLimiter;
   /** Authenticated deliveries per integration. */
-  integrationLimiter: SlidingWindowLimiter;
+  integrationLimiter: RateLimiter;
   log?: Pick<Logger, "info" | "warn">;
   now?: () => Date;
 }
@@ -46,23 +46,33 @@ export class AlertWebhookHandlers {
   async alertmanager(req: WebhookRequest): Promise<HttpResult> {
     const { ipLimiter, failedAuthLimiter, integrationLimiter, log } = this.options;
 
-    // 1. Cheap, in-memory gates first. All of them answer 503 + Retry-After (never 429, which Alertmanager would not retry).
-    const ip = ipLimiter.consume(req.ip);
+    // 1. Cheap IP gate first. All Alertmanager backpressure is 503 + Retry-After (never 429, which Alertmanager would not retry).
+    const ip = await ipLimiter.consume(req.ip);
     if (!ip.allowed) throw this.backpressure(ip.retryAfterSeconds);
-    const failures = failedAuthLimiter.peek(req.ip);
-    if (!failures.allowed) throw this.backpressure(failures.retryAfterSeconds);
+    // 2. Preflight the failed-auth budget while Redis is healthy. If Redis is unavailable, defer the decision until
+    // credentials are known: valid integrations may continue through the Alertmanager memory fallbacks; invalid
+    // credentials still call consume() below, which is fail-closed. Memory-only mode has no strict method and is checked here.
+    try {
+      const failures = failedAuthLimiter.peekStrict
+        ? await failedAuthLimiter.peekStrict(req.ip)
+        : await failedAuthLimiter.peek(req.ip);
+      if (!failures.allowed) throw this.backpressure(failures.retryAfterSeconds);
+    } catch (error) {
+      if (!(error instanceof RateLimiterUnavailableError)) throw error;
+    }
 
-    // 2. Credential: Authorization header only (query strings and cookies are never consulted). A wrongly shaped value is
-    //    rejected without touching the database.
+    // 3. Credential: Authorization header only (query strings and cookies are never consulted). A wrongly shaped value is
+    //    rejected without touching the database when the healthy failed-auth preflight has exhausted its budget.
     const authorization = req.headers.authorization;
     const match = typeof authorization === "string" ? BEARER.exec(authorization) : null;
     const integration = match ? await this.lookup(match[1] as string) : null;
     if (!integration) {
-      failedAuthLimiter.consume(req.ip);
+      const failure = await failedAuthLimiter.consume(req.ip);
+      if (!failure.allowed) throw this.backpressure(failure.retryAfterSeconds);
       throw new AppError("UNAUTHENTICATED", "Invalid or revoked credentials", { headers: { ...CHALLENGE } });
     }
 
-    const perIntegration = integrationLimiter.consume(integration.id);
+    const perIntegration = await integrationLimiter.consume(integration.id);
     if (!perIntegration.allowed) throw this.backpressure(perIntegration.retryAfterSeconds);
 
     // 3. Body, then validation. Nothing has been written yet, so a rejected request leaves no trace.
@@ -83,7 +93,8 @@ export class AlertWebhookHandlers {
     } catch (error) {
       if (error instanceof AppError && error.code === "UNAUTHENTICATED") {
         // Revoked or rotated between the lookup and the transaction.
-        failedAuthLimiter.consume(req.ip);
+        const failure = await failedAuthLimiter.consume(req.ip);
+        if (!failure.allowed) throw this.backpressure(failure.retryAfterSeconds);
         throw new AppError("UNAUTHENTICATED", error.message, { headers: { ...CHALLENGE } });
       }
       const failure = toRetryableFailure(error);

@@ -94,7 +94,8 @@ flowchart LR
 ```
 
 **Design stance:** a modular monolith with a background worker. PostgreSQL is the single source of truth. There is **no ORM**
-(handwritten SQL with `pg` and numbered, never-edited migrations), **no Redis** and **no paid service**.
+(handwritten SQL with `pg` and numbered, never-edited migrations). Redis is optional for rate limiting, while PostgreSQL remains
+the source of truth for application data and the background job queue; there are **no paid services** required for local development.
 
 ---
 
@@ -132,6 +133,57 @@ npm run dev:web        # web on http://127.0.0.1:3000
 > ⚠️ Open **`http://127.0.0.1:3000`**. The session cookie is host-only. Use `127.0.0.1` consistently instead of switching between
 > `localhost` and `127.0.0.1`; a cookie set for one hostname is not sent to the other.
 
+### Redis-backed rate limiting
+
+The API uses the same asynchronous `RateLimiter` interface for process-local and distributed limiting. The in-memory
+`SlidingWindowLimiter` is used when `REDIS_URL` is unset and as the Alertmanager outage fallback. When configured,
+`RedisRateLimiter` records requests in Redis Sorted Sets, with one member per unique request. Atomic Lua scripts obtain time
+from Redis itself, remove expired entries, enforce policy-specific counters, and implement `consume()`, `peek()` and `reset()`.
+Redis keys include the fixed application prefix, version, one of the seven policy namespaces, and a SHA-256 hash of the identity;
+raw email addresses and IP addresses do not appear in keys. Keys receive a TTL and expire after the policy window.
+
+For local Redis, start the existing Redis service from the repository root:
+
+```bash
+docker compose up -d redis
+```
+
+The Compose service listens on loopback at `127.0.0.1:6380`. Configure the API process with:
+
+```bash
+# PowerShell
+$env:REDIS_URL="redis://127.0.0.1:6380"
+
+# CMD
+set REDIS_URL=redis://127.0.0.1:6380
+
+# Bash
+export REDIS_URL="redis://127.0.0.1:6380"
+```
+
+If `REDIS_URL` is unset, the API continues to use in-memory limiting. Redis is therefore not required for application startup.
+Production limits are: login IP 100/15 minutes; login account+IP 5/15 minutes; registration IP 10/hour; Alertmanager IP
+600/minute; failed webhook authentication 20/5 minutes; Alertmanager integration 300/minute; AI suggestions 5/10 minutes per
+user globally across organizations. Login, registration, failed webhook authentication and AI suggestions fail closed when
+Redis is unavailable. Alertmanager IP and integration limits use in-memory fallback. A valid Alertmanager integration is not
+rejected solely because the failed-authentication preflight cannot reach Redis; invalid credentials still fail closed.
+TCP connection establishment is capped at 1 second; the full Redis handshake and each dispatched command have separate 5-second absolute deadlines. Commands waiting to be written have a 1-second queue timeout. A timed-out operation destroys its client, offline queuing is disabled, and a subsequent request reconnects after a short cooldown. The Redis scripts use Redis server time rather than application-host clocks.
+
+The production limit values are:
+
+| Limiter | Limit | Window |
+|---|---:|---:|
+| Login per IP | 100 | 15 minutes |
+| Login per account + IP | 5 | 15 minutes |
+| Registration per IP | 10 | 1 hour |
+| Alertmanager per IP | 600 | 1 minute |
+| Failed webhook authentication | 20 | 5 minutes |
+| Alertmanager per integration | 300 | 1 minute |
+| AI suggestions per user | 5 | 10 minutes |
+
+The registration limiter uses a more permissive 10,000/hour test-only override in the test environment. CI is configured to run the dedicated Redis suite against Redis 7. The demo currently runs one API instance; production multi-instance
+behaviour and a Render Valkey configuration have not been established or configured.
+
 **Try the integrations locally** (loopback only, tokens are created in the Team page and never committed):
 
 ```bash
@@ -147,7 +199,9 @@ npm run simulate:change         # send a sample deploy/change event
 npm run check:deps && npm run check:hygiene
 npm run typecheck && npm run lint
 npm test                    # unit tests (scripts, shared, API, web)
+npm test -w @platform/api   # API unit tests only, with Redis-specific tests excluded
 npm run test:integration    # real PostgreSQL, loopback only
+npm run test:redis -w @platform/api  # dedicated real-Redis tests; Redis 7 and loopback TEST_DATABASE_URL must be available
 npm run build
 npm run smoke:stack         # against the running container stack
 ```
