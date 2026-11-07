@@ -6,6 +6,8 @@
 Alert intake and deduplication · similar-incident retrieval · change correlation · GitHub context · opt-in grounded AI · Redis-backed rate limiting.
 Built on a zero budget, with every safety claim backed by a test or marked as unverified.
 
+<a href="https://incident-intelligence-free-demo.onrender.com"><img alt="Open the live demo" src="https://img.shields.io/badge/live%20demo-open%20the%20app-FFB224?style=for-the-badge&labelColor=0B0B0C"></a>
+
 <a href="https://github.com/aayushtiwari307/incident-intelligence-platform/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/aayushtiwari307/incident-intelligence-platform/actions/workflows/ci.yml/badge.svg"></a>
 <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 <img alt="Node 22" src="https://img.shields.io/badge/Node-22-339933?style=flat-square&logo=nodedotjs&logoColor=white">
@@ -17,20 +19,82 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 <img alt="Socket.IO 4.8" src="https://img.shields.io/badge/Socket.IO-4.8-010101?style=flat-square&logo=socketdotio&logoColor=white">
 <img alt="Budget: zero rupees" src="https://img.shields.io/badge/budget-%E2%82%B90-brightgreen?style=flat-square">
 
-[Highlights](#-highlights) · [Features](#-features) · [Architecture](#-architecture) · [Rate limiting](#-redis-backed-rate-limiting) · [Quick start](#-quick-start) · [Evidence](#-what-is-verified-and-what-is-not) · [Docs](#-documentation-map)
+[Live demo](#-live-demo) · [Highlights](#-highlights) · [Features](#-features) · [Architecture](#-architecture) · [Rate limiting](#-redis-backed-rate-limiting) · [Quick start](#-quick-start) · [Evidence](#-what-is-verified-and-what-is-not) · [Docs](#-documentation-map)
 
-**Live demo:** https://incident-intelligence-free-demo.onrender.com
-<br/>
-<sub>Sign-in is invite-only (public registration is disabled in production by design). The demo runs on a free tier, so the first request after idle time can be slow.</sub>
+<sub>Registration is invite-only (public registration is disabled in production by design). The demo runs on a free tier, so the first request after idle time can be slow.</sub>
 
 </div>
+
+---
+
+## 🌐 Live demo
+
+> [!TIP]
+> **No setup needed.** Open the app, sign in with the read-only account below, and explore three synthetic incidents in different lifecycle states.
+
+| | |
+|---|---|
+| **App** | https://incident-intelligence-free-demo.onrender.com |
+| **Email** | `aayushtiwari004@gmail.com` |
+| **Password** | `[ADD PUBLIC DEMO PASSWORD]` |
+| **Role** | **Viewer** (read-only) |
+
+> [!NOTE]
+> **Read-only demo account.** You can look at everything the Viewer role allows, but you cannot change incidents, manage the team or see integration credentials.
+> **Registration remains invitation-only by design.** There is no public sign-up, and this demo account does not change that.
+
+### Try it in about a minute
+
+1. Open the app. The first load after idle time can be slow because the free-tier host has to wake up; give it a moment.
+2. Sign in with the email and password above.
+3. Open the **Incidents** list and **start with these three synthetic incidents**, which cover different lifecycle states:
+
+   | Incident | Title | State |
+   |---|---|---|
+   | INC-0007 | API Latency Spike | Triggered |
+   | INC-0008 | Notification Delivery Backlog | Investigating |
+   | INC-0009 | Database Connection Pool Saturation | Resolved |
+
+   The list also contains older records created while the platform was being tested. They are engineering verification records, apart from **INC-0002**, which is referenced in the next step.
+4. Open any of the three. Each one has a **service association** (the *IIP Live Verification Service*), and the detail view includes similar-incident information. For a **populated service/change-event example**, open **INC-0002**: its service/change context shows a change event and is labelled *"correlation, not proven cause"*.
+5. Open **Services** to see the service the three new incidents are attached to.
+
+### What the Viewer account can and cannot do
+
+| As a Viewer you can | By design you cannot |
+|---|---|
+| Browse incidents and open incident details | Change an incident's status |
+| See services and service/change context | Manage the team or invitations |
+| See similar-incident information | See integration credentials or management controls |
+| Use the other read-only pages | Create an account (registration is invite-only) |
+
+Because the demo is read-only, it does **not** show the write-side workflows live: status transitions, alert intake and deduplication, real-time updates between users, or AI suggestions. Those are covered by automated tests and recorded runs; see [what is verified, and what is not](#-what-is-verified-and-what-is-not).
+
+### What was actually checked for this demo (2026-11-07)
+
+| Check | Result |
+|---|---|
+| Viewer signs in and can open incidents, services, service/change context and similar-incident information | ✅ Checked in the UI |
+| One **direct** status-transition request made with the Viewer's session | ✅ Rejected with `HTTP 403 FORBIDDEN`; the incident stayed unchanged (Triggered, version 2) |
+| Team page as a Viewer | ✅ No integration secrets or management controls visible |
+| Every other write endpoint probed directly with the Viewer session | ⚪ **Not done.** Only the status transition was tested this way. Role enforcement for the rest is described in the [security model](#-security-model) and is not independently claimed here |
+
+### Demo notes
+
+- **Synthetic data only.** The incidents are made up for demonstration. Please do not enter real personal or company information.
+- **Do not reuse this password.** The demo password is public and shared by every visitor. Never use it for any other account or service.
+- **Member emails are visible.** The Team page shows member email addresses to the Viewer. This is a known, accepted trade-off for a public demo.
+- **Typos and lockouts.** Failed sign-ins are rate-limited per account and IP (5 attempts per 15 minutes; see [rate limiting](#-redis-backed-rate-limiting)). If you get locked out, wait and try again.
+- **AI is off in the demo.** AI suggestions are not enabled for the demo organization.
+- **Free-tier host.** The demo runs on Render Free + Neon Free as a single API instance, so expect slow first loads.
 
 ---
 
 ## 📌 Status at a glance
 
 > [!NOTE]
-> **As of 2026-11-06, Milestones M1–M10 are complete, deployed, and verified.** CI is green. The live demo runs on Render Free + Neon.
+> **As of 2026-11-07, the core platform and its documented milestones are implemented, with a free-tier public demo available.** Individual verification results and remaining limitations are documented [below](#-what-is-verified-and-what-is-not). CI is green on `main`.
+> A public, read-only demo account is available (see [Live demo](#-live-demo)).
 >
 > **Redis-backed rate limiting has been implemented, tested, and merged into `main` through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9)** (see the
 > [verified results](#redis-rate-limiting-pr-9--final-verified-results)). **Redis is not configured on the public Render demo**, which
@@ -40,7 +104,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 > enabled; a live two-tab, same-session test passed earlier. The Gemini provider is enabled in the Render server configuration,
 > but each organization must still opt in separately. One genuine Gemini request was verified **locally with synthetic data**;
 > **no Gemini request has been made from the public Render deployment**. A GitHub Actions keepalive (five-minute schedule,
-> best-effort) was added. See the [evidence table](#-what-is-verified-and-what-is-not) for exactly what is proven and what is not.
+> best-effort) was added.
 
 ---
 
@@ -65,7 +129,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 | **Alertmanager intake** | `POST /api/v1/integrations/alertmanager` accepts Prometheus Alertmanager webhook v4, authenticates with a hashed bearer credential (rotate / revoke supported), and **deduplicates** by integration + fingerprint + `startsAt`. |
 | **Similar incidents (no AI)** | PostgreSQL weighted full-text search over resolved incidents, tenant-scoped, with matched terms shown. Includes a reproducible evaluation harness. |
 | **Grounded AI suggestions (opt-in)** | Gemini 3.5 Flash-Lite provider (a mock provider is used in tests), enabled server-side by configuration, with each organization opting in separately. The model sees the incident plus at most five similar resolved incidents, best-effort redacted. Output is validated against a strict schema and must cite sources by alias with verbatim quotes (provenance check). Suggestions are rate-limited and quota-limited, and only a human can apply them. |
-| **Service and change context (M10)** | Per-organization service catalog, a separate change-event webhook (idempotent), and an incident panel listing changes from the 24 hours before the incident, labelled *"correlation, not proven cause."* |
+| **Service and change context** | Per-organization service catalog, a separate change-event webhook (idempotent), and an incident panel listing changes from the 24 hours before the incident, labelled *"correlation, not proven cause."* |
 | **GitHub issue/PR enrichment** | Opt-in per organization with a repository allow-list. Public data only, fixed `api.github.com` origin, no redirects, bounded responses, ETag caching, quota-aware rate limiting and a circuit breaker. No GitHub token is stored. |
 | **Real-time updates** | Socket.IO fed by PostgreSQL `LISTEN/NOTIFY`. The handshake checks the session cookie and `Origin`; only organization-filtered messages are broadcast. Needs a direct (non-pooled) database URL. Enabled in the Render configuration (backend listener verified, frontend build flag on). |
 | **Durable job queue** | PostgreSQL-backed, with no broker and no Redis dependency: `FOR UPDATE SKIP LOCKED`, leases with fencing, retries with backoff, and poison-job isolation so one bad job cannot starve healthy ones. |
@@ -288,14 +352,15 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 | Area | Evidence | Status |
 |---|---|---|
 | Redis rate limiting | Implemented, tested and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`; results in the table above. No Redis/Valkey service is configured for the Render demo, and multi-instance production behaviour is not established | ✅ Verified in tests · demo not Redis-backed |
-| Whole platform M1–M10 | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build. These counts are from that earlier commit and are not directly comparable to the API-only figures above | ✅ Verified locally |
+| Whole platform | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build. These counts are from that earlier commit and are not directly comparable to the API-only figures above | ✅ Verified locally |
 | Container stack | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout | ✅ Verified locally |
 | Demo deployment | Render Free + Neon at https://incident-intelligence-free-demo.onrender.com; `/health/live` and `/health/ready` return OK | ✅ Live runtime verified |
+| Public demo access | A Viewer account created through the normal Team invitation flow, with three synthetic incidents (INC-0007 to INC-0009). Viewer read access was checked in the UI; one direct status-transition request with the Viewer session returned `403 FORBIDDEN` and left the incident unchanged; the Team page showed no integration secrets or management controls. Other write endpoints were **not** individually probed with the Viewer session. Details in [Live demo](#-live-demo) | 🟡 Partially verified (2026-11-07) |
 | Keepalive workflow | A GitHub Actions workflow is scheduled every five minutes to ping the Render service. Scheduled runs are **best-effort**: GitHub may delay or skip them. The first **manual** run received HTTP 200 from Render; reliable **recurring scheduled** execution has not been verified | 🟡 Manual run verified · scheduled runs unverified |
 | Continuous integration | Latest run on `main` is green | ✅ Passing |
 | Dependency audit | `npm audit` reported **0 vulnerabilities** on the 2026-10-25 tree (547 packages) | ✅ Clean on 2026-10-25 |
-| GitHub enrichment (0013) | Repository/PR association and the API/UI paths are implemented and tested. Live PR/issue detail retrieval remains unverified: the earlier live attempt returned `rate_limited` | 🟡 Live detail retrieval unverified |
-| Service and change context (0014) | Live change event `live-check-001` appeared in Incident #3's service/change context, and the service association and event details persisted after refresh. Correlation is contextual evidence only; causation is **not** proven | ✅ Live persistence verified |
+| GitHub enrichment | Repository/PR association and the API/UI paths are implemented and tested. Live PR/issue detail retrieval remains unverified: the earlier live attempt returned `rate_limited` | 🟡 Live detail retrieval unverified |
+| Service and change context | Live change event `live-check-001` appeared in Incident #3's service/change context, and the service association and event details persisted after refresh. Correlation is contextual evidence only; causation is **not** proven | ✅ Live persistence verified |
 | Registration policy | Invite-only default in production, covered by code and tests | 🟡 Not separately checked on the live service |
 | Real-time | Integration tests and the 20/20 container smoke test cover authentication, delivery, tenant isolation and logout. On Render, backend listener startup was verified (`listening: true`) and the frontend real-time build flag is enabled. A live **two-tab** test (Triggered → Acknowledged in one tab updated the other without refresh) was run earlier in the **same browser session**; there is **no independent-user verification** | ✅ Listener verified · 🟡 two-tab, same-session only |
 | Alertmanager intake | 8 synthetic live scenarios passed (including 5 concurrent deliveries → 1 incident + 4 duplicates). A real `prom/alertmanager` container then delivered an authenticated alert to the deployed app and created Incident #6. Deduplication and resolution were verified with the synthetic scenarios | ✅ Verified |
@@ -303,7 +368,7 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 | Backup / restore | Guarded scripts and focused safety tests; a disposable local PostgreSQL backup/restore verification passed on 2026-11-02 | ✅ Verified locally, not a production restore drill |
 
 <details>
-<summary><b>Retrieval quality (M8)</b></summary>
+<summary><b>Retrieval quality</b></summary>
 
 On a *synthetic, single-author* corpus of 32 resolved incidents, weighted English full-text search scored Recall@5 **0.82** against
 **0.60** for a plain full-text baseline (+0.22; paired bootstrap interval +0.09 to +0.34). The point estimate met the pre-declared
@@ -342,25 +407,28 @@ proof of real-world relevance. Protocol and corpora are in [`docs/verification/`
 
 ---
 
-## 🗺 Roadmap
+## 🗺 Project status
 
-- [x] M1–M5: auth, organizations, incident workflow, durable queue, real-time, hardening
-- [x] M6: free-tier deployment (Render + Neon)
-- [x] M7: Alertmanager intake and deduplication
-- [x] M8: similar incidents without AI, with evaluation
-- [x] M9: grounded AI and safety
-- [x] GitHub issue enrichment (association and API/UI paths implemented and tested)
-- [x] M10: service catalog and change context
-- [x] Full-tree verification on `main` (2026-10-25)
-- [x] Disposable local PostgreSQL backup/restore verification (2026-11-02)
-- [x] Real-time: Render backend listener verified; two-tab test in the same browser session (no independent-user claim)
-- [x] Genuine local Alertmanager container delivery to Render verified (Incident #6)
-- [x] Gemini adapter implemented for M9 grounded suggestions
-- [x] One genuine local Gemini request verified with synthetic incident data (2026-11-05); no Gemini request from the public Render deployment
-- [x] Control Room redesign deployed to Render
-- [x] Best-effort GitHub Actions keepalive added (first manual run returned HTTP 200; scheduled runs not yet verified)
-- [x] **Redis-backed rate limiting:** seven policies implemented, tested, and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`
+**Implemented**
+
+- [x] Multi-tenant auth, organizations, four roles and email-bound invitations
+- [x] Incident lifecycle with audit timeline and optimistic concurrency
+- [x] Durable PostgreSQL job queue
+- [x] Real-time updates (Socket.IO over `LISTEN/NOTIFY`)
+- [x] Alertmanager intake with deduplication
+- [x] Similar-incident retrieval, with an evaluation harness
+- [x] Opt-in grounded AI suggestions (Gemini provider)
+- [x] GitHub issue/PR enrichment (association and API/UI paths)
+- [x] Service catalog and change-event context
+- [x] Redis-backed rate limiting ([PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9))
+- [x] Control Room UI
+- [x] Free-tier deployment on Render + Neon, best-effort keepalive, and a public read-only Viewer demo
+
+**Still open**
+
 - [ ] Successful live GitHub PR/issue detail retrieval
+- [ ] Independent-user real-time verification (only a same-session two-tab test so far)
+- [ ] Verified recurring scheduled keepalive runs (only a manual run so far)
 
 ---
 
@@ -374,7 +442,7 @@ proof of real-world relevance. Protocol and corpora are in [`docs/verification/`
 | Change-event webhook | [`docs/integrations/change-events.md`](docs/integrations/change-events.md) |
 | Gemini grounded suggestions | [`docs/integrations/gemini-ai-suggestions.md`](docs/integrations/gemini-ai-suggestions.md) |
 | GitHub enrichment design | [`docs/design/github-issue-enrichment.md`](docs/design/github-issue-enrichment.md) |
-| M10 design | [`docs/design/m10-service-change-context.md`](docs/design/m10-service-change-context.md) |
+| Service and change context design | [`docs/design/m10-service-change-context.md`](docs/design/m10-service-change-context.md) |
 | Free deployment guide | [`docs/deployment/m6-free-deployment.md`](docs/deployment/m6-free-deployment.md) |
 | Real-time rollout | [`docs/deployment/realtime-rollout.md`](docs/deployment/realtime-rollout.md) |
 | Verification records | [`docs/verification/`](docs/verification/) |
