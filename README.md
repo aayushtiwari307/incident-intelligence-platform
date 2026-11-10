@@ -1,4 +1,4 @@
-<div align="center">
+ <div align="center">
 
 <img alt="" width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=150&color=0:FFB224,100:E0234E&section=header">
 
@@ -25,7 +25,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 <img alt="NestJS 11" src="https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white">
 <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white">
 <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white">
-<img alt="Redis 7 (optional)" src="https://img.shields.io/badge/Redis-7%20optional-DC382D?style=flat-square&logo=redis&logoColor=white">
+<img alt="Redis 7 (Compose default)" src="https://img.shields.io/badge/Redis-7%20Compose%20default-DC382D?style=flat-square&logo=redis&logoColor=white">
 <img alt="Socket.IO 4.8" src="https://img.shields.io/badge/Socket.IO-4.8-010101?style=flat-square&logo=socketdotio&logoColor=white">
 
 <br>
@@ -56,7 +56,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 |---|---|
 | 🌐 **App** | https://incident-intelligence-free-demo.onrender.com |
 | 📧 **Email** | `aayushtiwari004@gmail.com` |
-| 🔑 **Password** | `[ADD PUBLIC DEMO PASSWORD]` |
+| 🔑 **Password** | Request the current shared Viewer password from the repository maintainer through [GitHub](https://github.com/aayushtiwari307). |
 | 👁️ **Role** | **Viewer** (read-only) |
 
 > [!NOTE]
@@ -67,7 +67,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
 ### Try it in about a minute
 
 1. Open the app. The first load after idle time can be slow because the free-tier host has to wake up; give it a moment.
-2. Sign in with the email and password above.
+2. Sign in with the email above and the shared password provided by the repository maintainer.
 3. Open the **Incidents** list and **start with these three synthetic incidents**, which cover different lifecycle states:
 
    | Incident | Title | State |
@@ -77,6 +77,7 @@ Built on a zero budget, with every safety claim backed by a test or marked as un
    | INC-0009 | Database Connection Pool Saturation | 🟢 Resolved |
 
    The list also contains older records created while the platform was being tested. They are engineering verification records, apart from **INC-0002**, which is referenced in the next step.
+
 4. Open any of the three. Each one has a **service association** (the *IIP Live Verification Service*), and the detail view includes similar-incident information. For a **populated service/change-event example**, open **INC-0002**: its service/change context shows a change event and is labelled *"correlation, not proven cause"*.
 5. Open **Services** to see the service the three new incidents are attached to.
 
@@ -105,7 +106,7 @@ Because the demo is read-only, it does **not** show the write-side workflows liv
 | | |
 |---|---|
 | 🧪 **Synthetic data only.** | The incidents are made up for demonstration. Please do not enter real personal or company information. |
-| 🔑 **Do not reuse this password.** | The demo password is public and shared by every visitor. Never use it for any other account or service. |
+| 🔑 **Shared demo account.** | The Viewer account is shared with demo visitors. The password is provided separately; never reuse it for any other account or service. |
 | 📧 **Member emails are visible.** | The Team page shows member email addresses to the Viewer. This is a known, accepted trade-off for a public demo. |
 | ⏳ **Typos and lockouts.** | Failed sign-ins are rate-limited per account and IP (5 attempts per 15 minutes; see [rate limiting](#-redis-backed-rate-limiting)). If you get locked out, wait and try again. |
 | 🤖 **AI is off in the demo.** | AI suggestions are not enabled for the demo organization. |
@@ -116,13 +117,13 @@ Because the demo is read-only, it does **not** show the write-side workflows liv
 ## 📌 Status at a glance
 
 > [!NOTE]
-> **As of 2026-11-07, the core platform and its documented milestones are implemented, with a free-tier public demo available.** Individual verification results and remaining limitations are documented [below](#-what-is-verified-and-what-is-not). CI is green on `main`.
+> **As of 2026-11-10, the core platform and its documented milestones are implemented, with a free-tier public demo available.** Individual verification results and remaining limitations are documented [below](#-what-is-verified-and-what-is-not). CI is green on `main`.
 >
 > A public, read-only demo account is available (see [Live demo](#-live-demo)).
 
 | | |
 |:-:|---|
-| 🚦 | **Redis-backed rate limiting has been implemented, tested, and merged into `main` through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9)** (see the [verified results](#redis-rate-limiting-pr-9--final-verified-results)). **Redis is not configured on the public Render demo**, which runs a single API instance. |
+| 🚦 | **Redis-backed rate limiting has been implemented and tested through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9); Redis is enabled by default in the local Docker Compose app profile through [PR #10](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/10).** Redis is not configured on the public Render demo, which runs a single API instance. |
 | ⚡ | On Render, the backend real-time listener started successfully (`listening: true`) and the frontend real-time build flag is enabled; a live two-tab, same-session test passed earlier. |
 | 🤖 | The Gemini provider is enabled in the Render server configuration, but each organization must still opt in separately. One genuine Gemini request was verified **locally with synthetic data**; **no Gemini request has been made from the public Render deployment**. |
 | ⏱️ | A GitHub Actions keepalive (five-minute schedule, best-effort) was added. |
@@ -181,7 +182,7 @@ Because the demo is read-only, it does **not** show the write-side workflows liv
 | 🧭 **Service and change context** | Per-organization service catalog, a separate change-event webhook (idempotent), and an incident panel listing changes from the 24 hours before the incident, labelled *"correlation, not proven cause."* |
 | 🐙 **GitHub issue/PR enrichment** | Opt-in per organization with a repository allow-list. Public data only, fixed `api.github.com` origin, no redirects, bounded responses, ETag caching, quota-aware rate limiting and a circuit breaker. No GitHub token is stored. |
 | ⚡ **Real-time updates** | Socket.IO fed by PostgreSQL `LISTEN/NOTIFY`. The handshake checks the session cookie and `Origin`; only organization-filtered messages are broadcast. Needs a direct (non-pooled) database URL. Enabled in the Render configuration (backend listener verified, frontend build flag on). |
-| 🗃️ **Durable job queue** | PostgreSQL-backed, with no broker and no Redis dependency: `FOR UPDATE SKIP LOCKED`, leases with fencing, retries with backoff, and poison-job isolation so one bad job cannot starve healthy ones. |
+| 🗃️ **Durable job queue** | PostgreSQL-backed and independent of Redis or a separate message broker: `FOR UPDATE SKIP LOCKED`, leases with fencing, retries with backoff, and poison-job isolation so one bad job cannot starve healthy ones. |
 | 🖥️ **Control Room UI** | A dark, keyboard-friendly interface with a sidebar, status progress track, severity indicators and instructive empty states. Deployed on the live demo. |
 
 ---
@@ -271,17 +272,14 @@ flowchart LR
   class J ai
 ```
 
-> **Design stance:** a modular monolith with a background worker. PostgreSQL is the single source of truth for application data and
-> the background job queue. There is **no ORM** (handwritten SQL with `pg` and numbered, never-edited migrations). Redis is
-> **enabled by default in the Docker Compose `app` profile** for distributed rate limiting; standalone API processes use the in-memory fallback when `REDIS_URL` is unset. **No paid services** are required
-> for local development.
+> **Design stance:** a modular monolith with a background worker. PostgreSQL is the single source of truth for application data and the background job queue. There is **no ORM** (handwritten SQL with `pg` and numbered, never-edited migrations). Redis is **enabled by default in the Docker Compose `app` profile** for distributed rate limiting; standalone API processes use the in-memory fallback when `REDIS_URL` is unset. **No paid services** are required for local development.
 
 ---
 
 ## 🚦 Redis-backed rate limiting
 
 > [!IMPORTANT]
-> **Status: implemented, tested, and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`.**
+> **Status: implemented, tested, and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9). Redis was enabled by default in the local Docker Compose `app` profile through [PR #10](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/10).**
 
 The API uses one asynchronous `RateLimiter` interface (`consume()`, `peek()`, `reset()`) for both process-local and distributed limiting. The Docker Compose `app` profile defaults `REDIS_URL` to `redis://redis:6379` and starts the API only after both PostgreSQL and Redis report healthy. This enables shared rate-limit state across API processes in the local Compose stack. For a non-Compose API process, leaving `REDIS_URL` unset selects the in-memory `SlidingWindowLimiter`.
 
@@ -297,8 +295,7 @@ The API uses one asynchronous `RateLimiter` interface (`consume()`, `peek()`, `r
 | 6 | **Alertmanager integration** | Per integration | 300 | 1 min | 🔓 **Fail open** → in-memory fallback (process-local limits still enforced) |
 | 7 | **AI requests by user** | Per user, global across organizations | 5 | 10 min | 🔒 **Fail closed** |
 
-A valid Alertmanager integration is never rejected solely because the failed-authentication preflight cannot reach Redis; invalid
-credentials still fail closed. Registration uses a more permissive 10,000/hour override in the test environment only.
+A valid Alertmanager integration is never rejected solely because the failed-authentication preflight cannot reach Redis; invalid credentials still fail closed. Registration uses a more permissive 10,000/hour override in the test environment only.
 
 ### Engineering details
 
@@ -355,7 +352,7 @@ npm run test:redis -w @platform/api   # needs Redis 7 and a loopback TEST_DATABA
 | 🖥️ **Web** | Next.js 16 (App Router), React 19, TypeScript |
 | ⚙️ **API** | NestJS 11 with framework-free handlers behind thin controllers |
 | 🗄️ **Data** | PostgreSQL 16, raw SQL via `pg`, 14 numbered migrations |
-| 🚦 **Rate limiting** | Optional Redis sliding window (atomic Lua scripts, Redis 7 in CI) with an in-memory limiter fallback |
+| 🚦 **Rate limiting** | Redis 7 sliding window (atomic Lua scripts; enabled by default in the Compose `app` profile), with an in-memory fallback for standalone API processes |
 | ⚡ **Real-time** | Socket.IO 4.8 over PostgreSQL `LISTEN/NOTIFY` |
 | ✅ **Validation** | Zod 4, shared between API and web (`packages/shared`) |
 | 🤖 **AI (optional)** | Gemini 3.5 Flash-Lite adapter with schema-validated, citation-checked output |
@@ -367,8 +364,7 @@ npm run test:redis -w @platform/api   # needs Redis 7 and a loopback TEST_DATABA
 
 ## 🚀 Quick start
 
-Requirements: **Node 22+**, npm 10+, Docker (for the local PostgreSQL). Windows CMD and PowerShell walkthroughs are in
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Requirements: **Node 22+**, npm 10+, Docker (for the local PostgreSQL). Windows CMD and PowerShell walkthroughs are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ```bash
 npm ci
@@ -381,10 +377,9 @@ npm run dev:web        # web on http://127.0.0.1:3000
 ```
 
 > [!WARNING]
-> Open **`http://127.0.0.1:3000`**. The session cookie is host-only. Use `127.0.0.1` consistently instead of switching between
-> `localhost` and `127.0.0.1`; a cookie set for one hostname is not sent to the other.
+> Open **`http://127.0.0.1:3000`**. The session cookie is host-only. Use `127.0.0.1` consistently instead of switching between `localhost` and `127.0.0.1`; a cookie set for one hostname is not sent to the other.
 
-The Docker Compose `app` profile enables Redis-backed distributed limiting by default. Redis remains optional for standalone API processes, which can use in-memory limiting. See [Run it locally](#-redis-backed-rate-limiting).
+The Quick Start commands above run the API directly on the host, so it uses in-memory rate limiting unless `REDIS_URL` is configured. The Docker Compose `app` profile enables Redis-backed distributed limiting by default. See [Run it locally](#-redis-backed-rate-limiting) for the Compose setup.
 
 **Try the integrations locally** (loopback only, tokens are created in the Team page and never committed):
 
@@ -408,12 +403,9 @@ npm run build
 npm run smoke:stack         # against the running container stack
 ```
 
-> `smoke:stack` also checks real-time. For a local run, set `REALTIME_ENABLED=true` in your `.env` and recreate the API
-> container first, otherwise its real-time checks fail by design.
+> `smoke:stack` also checks real-time. For a local run, set `REALTIME_ENABLED=true` in your `.env` and recreate the API container first, otherwise its real-time checks fail by design.
 
-Integration tests **fail closed** unless the database host is loopback, so they cannot touch a hosted database. CI also builds
-the full container stack, smoke-tests HTTP and WebSocket behaviour (including a negative control that must fail when real-time is
-off), and repeats the smoke test through the single-origin proxy.
+Integration tests **fail closed** unless the database host is loopback, so they cannot touch a hosted database. CI also builds the full container stack, smoke-tests HTTP and WebSocket behaviour (including a negative control that must fail when real-time is off), and repeats the smoke test through the single-origin proxy.
 
 ---
 
@@ -434,10 +426,7 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 
 ### Local Compose distributed check (2026-11-10)
 
-Two independent API containers shared the same Compose Redis service. A manual HTTP run sent 200
-`POST /api/auth/login` requests, split evenly between the two API processes. Each request used a
-unique synthetic account and invalid credentials, so a `401` indicates that it passed the
-login-IP rate limiter and reached authentication.
+Two independent API containers shared the same Compose Redis service. A manual HTTP run sent 200 `POST /api/auth/login` requests, split evenly between the two API processes. Each request used a unique synthetic account and invalid credentials, so a `401` indicates that it passed the login-IP rate limiter and reached authentication.
 
 | Check | Result |
 |---|---|
@@ -450,39 +439,34 @@ login-IP rate limiter and reached authentication.
 | Unexpected responses/errors | 0 |
 | Cleanup | Temporary API container and test Redis key removed |
 
-This was a manual local verification, not a checked-in automated test. It demonstrates shared
-rate-limit enforcement in the local Compose environment; it does not establish production
-deployment behaviour.
+This was a manual local verification, not a checked-in automated test. It demonstrates shared rate-limit enforcement in the local Compose environment; it does not establish production deployment behaviour.
 
 ### Platform-wide evidence
 
 | Area | Evidence | Status |
 |---|---|---|
-| 🚦 **Redis rate limiting** | Implemented, tested and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`; results in the table above. A manual local Compose two-process check is documented above. No Redis/Valkey service is configured for the single-instance Render demo; production multi-instance behaviour is not established | ✅ Verified in tests · demo not Redis-backed |
-| 🧩 **Whole platform** | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build. These counts are from that earlier commit and are not directly comparable to the API-only figures above | ✅ Verified locally |
-| 📦 **Container stack** | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout | ✅ Verified locally |
-| ☁️ **Demo deployment** | Render Free + Neon at https://incident-intelligence-free-demo.onrender.com; `/health/live` and `/health/ready` return OK | ✅ Live runtime verified |
-| 👁️ **Public demo access** | A Viewer account created through the normal Team invitation flow, with three synthetic incidents (INC-0007 to INC-0009). Viewer read access was checked in the UI; one direct status-transition request with the Viewer session returned `403 FORBIDDEN` and left the incident unchanged; the Team page showed no integration secrets or management controls. Other write endpoints were **not** individually probed with the Viewer session. Details in [Live demo](#-live-demo) | 🟡 Partially verified (2026-11-07) |
-| ⏱️ **Keepalive workflow** | A GitHub Actions workflow is scheduled every five minutes to ping the Render service. Scheduled runs are **best-effort**: GitHub may delay or skip them. The first **manual** run received HTTP 200 from Render; reliable **recurring scheduled** execution has not been verified | 🟡 Manual run verified · scheduled runs unverified |
-| 🔁 **Continuous integration** | Latest run on `main` is green | ✅ Passing |
-| 🛡️ **Dependency audit** | `npm audit` reported **0 vulnerabilities** on the 2026-10-25 tree (547 packages) | ✅ Clean on 2026-10-25 |
-| 🐙 **GitHub enrichment** | Repository/PR association and the API/UI paths are implemented and tested. Live PR/issue detail retrieval remains unverified: the earlier live attempt returned `rate_limited` | 🟡 Live detail retrieval unverified |
-| 🧭 **Service and change context** | Live change event `live-check-001` appeared in Incident #3's service/change context, and the service association and event details persisted after refresh. Correlation is contextual evidence only; causation is **not** proven | ✅ Live persistence verified |
-| 🔑 **Registration policy** | Invite-only default in production, covered by code and tests | 🟡 Not separately checked on the live service |
-| ⚡ **Real-time** | Integration tests and the 20/20 container smoke test cover authentication, delivery, tenant isolation and logout. On Render, backend listener startup was verified (`listening: true`) and the frontend real-time build flag is enabled. A live **two-tab** test (Triggered → Acknowledged in one tab updated the other without refresh) was run earlier in the **same browser session**; there is **no independent-user verification** | ✅ Listener verified · 🟡 two-tab, same-session only |
-| 🚨 **Alertmanager intake** | 8 synthetic live scenarios passed (including 5 concurrent deliveries → 1 incident + 4 duplicates). A real `prom/alertmanager` container then delivered an authenticated alert to the deployed app and created Incident #6. Deduplication and resolution were verified with the synthetic scenarios | ✅ Verified |
-| 🤖 **Grounded AI (Gemini)** | Gemini 3.5 Flash-Lite provider. One genuine request was run **locally** on a synthetic incident; it returned source-grounded suggestions that passed the existing validation flow. Provider tests passed 5/5. The provider is enabled in the Render server configuration, but organization-level opt-in is separate. An OpenAI adapter exists with unit tests only | 🟡 Verified locally on synthetic data · **no Gemini request has been made from the public Render deployment** |
-| 💾 **Backup / restore** | Guarded scripts and focused safety tests; a disposable local PostgreSQL backup/restore verification passed on 2026-11-02 | ✅ Verified locally, not a production restore drill |
+| 🚦 **Redis rate limiting** | Implemented, tested and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`; Redis defaults in the local Compose `app` profile through [PR #10](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/10). The local two-process check is documented above. No Redis/Valkey service is configured for the single-instance Render demo; production multi-instance behaviour is not established. | ✅ Verified in tests · demo not Redis-backed |
+| 🧩 **Whole platform** | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build. These counts are from that earlier commit and are not directly comparable to the API-only figures above. | ✅ Verified locally |
+| 📦 **Container stack** | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout. | ✅ Verified locally |
+| ☁️ **Demo deployment** | Render Free + Neon at https://incident-intelligence-free-demo.onrender.com; `/health/live` and `/health/ready` return OK. | ✅ Live runtime verified |
+| 👁️ **Public demo access** | A Viewer account created through the normal Team invitation flow, with three synthetic incidents (INC-0007 to INC-0009). Viewer read access was checked in the UI; one direct status-transition request with the Viewer session returned `403 FORBIDDEN` and left the incident unchanged; the Team page showed no integration secrets or management controls. Other write endpoints were **not** individually probed with the Viewer session. Details in [Live demo](#-live-demo). | 🟡 Partially verified (2026-11-07) |
+| ⏱️ **Keepalive workflow** | A GitHub Actions workflow is scheduled every five minutes to ping the Render service. Scheduled runs are **best-effort**: GitHub may delay or skip them. The first **manual** run received HTTP 200 from Render; reliable **recurring scheduled** execution has not been verified. | 🟡 Manual run verified · scheduled runs unverified |
+| 🔁 **Continuous integration** | Latest run on `main` is green. | ✅ Passing |
+| 🛡️ **Dependency audit** | `npm audit` reported **0 vulnerabilities** on the 2026-10-25 tree (547 packages). | ✅ Clean on 2026-10-25 |
+| 🐙 **GitHub enrichment** | Repository/PR association and the API/UI paths are implemented and tested. Live PR/issue detail retrieval remains unverified: the earlier live attempt returned `rate_limited`. | 🟡 Live detail retrieval unverified |
+| 🧭 **Service and change context** | Live change event `live-check-001` appeared in Incident #3's service/change context, and the service association and event details persisted after refresh. Correlation is contextual evidence only; causation is **not** proven. | ✅ Live persistence verified |
+| 🔑 **Registration policy** | Invite-only default in production, covered by code and tests. | 🟡 Not separately checked on the live service |
+| ⚡ **Real-time** | Integration tests and the 20/20 container smoke test cover authentication, delivery, tenant isolation and logout. On Render, backend listener startup was verified (`listening: true`) and the frontend real-time build flag is enabled. A live **two-tab** test (Triggered → Acknowledged in one tab updated the other without refresh) was run earlier in the **same browser session**; there is **no independent-user verification**. | ✅ Listener verified · 🟡 two-tab, same-session only |
+| 🚨 **Alertmanager intake** | 8 synthetic live scenarios passed (including 5 concurrent deliveries → 1 incident + 4 duplicates). A real `prom/alertmanager` container then delivered an authenticated alert to the deployed app and created Incident #6. Deduplication and resolution were verified with the synthetic scenarios. | ✅ Verified |
+| 🤖 **Grounded AI (Gemini)** | Gemini 3.5 Flash-Lite provider. One genuine request was run **locally** on a synthetic incident; it returned source-grounded suggestions that passed the existing validation flow. Provider tests passed 5/5. The provider is enabled in the Render server configuration, but organization-level opt-in is separate. An OpenAI adapter exists with unit tests only. | 🟡 Verified locally on synthetic data · **no Gemini request has been made from the public Render deployment** |
+| 💾 **Backup / restore** | Guarded scripts and focused safety tests; a disposable local PostgreSQL backup/restore verification passed on 2026-11-02. | ✅ Verified locally, not a production restore drill |
 
 <details>
 <summary><b>Retrieval quality</b></summary>
 
 <br>
 
-On a *synthetic, single-author* corpus of 32 resolved incidents, weighted English full-text search scored Recall@5 **0.82** against
-**0.60** for a plain full-text baseline (+0.22; paired bootstrap interval +0.09 to +0.34). The point estimate met the pre-declared
-+0.10 gate, but the interval's lower bound does not, and the corpus is not production data. Treat it as a regression guard, not
-proof of real-world relevance. Protocol and corpora are in [`docs/verification/`](docs/verification/).
+On a *synthetic, single-author* corpus of 32 resolved incidents, weighted English full-text search scored Recall@5 **0.82** against **0.60** for a plain full-text baseline (+0.22; paired bootstrap interval +0.09 to +0.34). The point estimate met the pre-declared +0.10 gate, but the interval's lower bound does not, and the corpus is not production data. Treat it as a regression guard, not proof of real-world relevance. Protocol and corpora are in [`docs/verification/`](docs/verification/).
 
 </details>
 
@@ -528,7 +512,8 @@ proof of real-world relevance. Protocol and corpora are in [`docs/verification/`
 - [x] Opt-in grounded AI suggestions (Gemini provider)
 - [x] GitHub issue/PR enrichment (association and API/UI paths)
 - [x] Service catalog and change-event context
-- [x] Redis-backed rate limiting ([PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9))
+- [x] Redis-backed rate limiting and dedicated Redis tests ([PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9))
+- [x] Redis enabled by default in the local Docker Compose `app` profile ([PR #10](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/10))
 - [x] Control Room UI
 - [x] Free-tier deployment on Render + Neon, best-effort keepalive, and a public read-only Viewer demo
 
