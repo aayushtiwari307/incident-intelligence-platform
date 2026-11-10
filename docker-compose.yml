@@ -7,7 +7,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6380:6379"
+      - "127.0.0.1:6381:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -44,8 +44,8 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3001
       DATABASE_URL: postgresql://${POSTGRES_USER:-platform}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-platform}
-      # Optional distributed rate-limit backend. When set inside Compose, use redis://redis:6379.
-      REDIS_URL: ${REDIS_URL:-}
+      # Redis-backed distributed rate limiting is enabled by default in Compose.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
       REALTIME_ENABLED: ${REALTIME_ENABLED:-false}
       # Real-time needs its own direct (non-pooled) PostgreSQL connection; this stack's postgres container is one.
@@ -68,6 +68,8 @@ services:
       - "127.0.0.1:3001:3001"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

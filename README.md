@@ -273,7 +273,7 @@ flowchart LR
 
 > **Design stance:** a modular monolith with a background worker. PostgreSQL is the single source of truth for application data and
 > the background job queue. There is **no ORM** (handwritten SQL with `pg` and numbered, never-edited migrations). Redis is
-> **optional** and used only for rate limiting; without it the API falls back to in-memory limiting. **No paid services** are required
+> **enabled by default in the Docker Compose `app` profile** for distributed rate limiting; standalone API processes use the in-memory fallback when `REDIS_URL` is unset. **No paid services** are required
 > for local development.
 
 ---
@@ -283,9 +283,7 @@ flowchart LR
 > [!IMPORTANT]
 > **Status: implemented, tested, and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`.**
 
-The API uses one asynchronous `RateLimiter` interface (`consume()`, `peek()`, `reset()`) for both process-local and distributed
-limiting. When `REDIS_URL` is set, `RedisRateLimiter` enforces limits in Redis so they hold across API processes. When it is unset,
-the in-memory `SlidingWindowLimiter` is used, so Redis is never required for startup.
+The API uses one asynchronous `RateLimiter` interface (`consume()`, `peek()`, `reset()`) for both process-local and distributed limiting. The Docker Compose `app` profile defaults `REDIS_URL` to `redis://redis:6379` and starts the API only after both PostgreSQL and Redis report healthy. This enables shared rate-limit state across API processes in the local Compose stack. For a non-Compose API process, leaving `REDIS_URL` unset selects the in-memory `SlidingWindowLimiter`.
 
 ### Policies
 
@@ -315,30 +313,30 @@ credentials still fail closed. Registration uses a more permissive 10,000/hour o
 | ♻️ **Successful-login reset** | A successful login resets that account's login counter, so legitimate users are not locked out by earlier typos. Failed attempts keep counting. |
 
 <details>
-<summary><b>Run it locally</b> (Redis is optional)</summary>
+<summary><b>Run it locally</b> (Compose defaults to Redis)</summary>
 
 <br>
 
-Start the existing Redis service from the repository root. It listens on loopback at `127.0.0.1:6380`:
+Start PostgreSQL, Redis and the API through the app profile. The API waits for both dependencies to become healthy. Redis is exposed on loopback at `127.0.0.1:6381`; Compose containers use `redis://redis:6379`:
 
 ```bash
-docker compose up -d redis
+docker compose --profile app up -d postgres redis api
 ```
 
-Then configure the API process:
+For an API process running directly on the host, configure:
 
 ```bash
 # PowerShell
-$env:REDIS_URL="redis://127.0.0.1:6380"
+$env:REDIS_URL="redis://127.0.0.1:6381"
 
 # CMD
-set REDIS_URL=redis://127.0.0.1:6380
+set REDIS_URL=redis://127.0.0.1:6381
 
 # Bash
-export REDIS_URL="redis://127.0.0.1:6380"
+export REDIS_URL="redis://127.0.0.1:6381"
 ```
 
-If `REDIS_URL` is unset, the API uses in-memory limiting. Run the dedicated Redis test suite with:
+A standalone API process with `REDIS_URL` unset uses in-memory limiting. Run the dedicated Redis test suite with:
 
 ```bash
 npm run test:redis -w @platform/api   # needs Redis 7 and a loopback TEST_DATABASE_URL
@@ -346,8 +344,7 @@ npm run test:redis -w @platform/api   # needs Redis 7 and a loopback TEST_DATABA
 
 </details>
 
-> **Scope of the claim.** CI is configured to run the dedicated Redis suite against Redis 7. The demo currently runs one API instance;
-> production multi-instance behaviour and a Render Valkey configuration have not been established or configured.
+> **Scope of the claim.** CI runs the dedicated Redis suite against Redis 7. The local two-process Compose verification is recorded in the verification section. The Render demo remains a single API instance with no Redis/Valkey service configured; production multi-instance behaviour has not been verified.
 
 ---
 
@@ -387,7 +384,7 @@ npm run dev:web        # web on http://127.0.0.1:3000
 > Open **`http://127.0.0.1:3000`**. The session cookie is host-only. Use `127.0.0.1` consistently instead of switching between
 > `localhost` and `127.0.0.1`; a cookie set for one hostname is not sent to the other.
 
-Redis is optional locally. To exercise distributed rate limiting, see [Run it locally](#-redis-backed-rate-limiting).
+The Docker Compose `app` profile enables Redis-backed distributed limiting by default. Redis remains optional for standalone API processes, which can use in-memory limiting. See [Run it locally](#-redis-backed-rate-limiting).
 
 **Try the integrations locally** (loopback only, tokens are created in the Team page and never committed):
 
@@ -435,11 +432,33 @@ Every claim here is tied to a date and a kind of evidence. Nothing is rounded up
 | API typecheck | ✅ Passed |
 | API build | ✅ Passed |
 
+### Local Compose distributed check (2026-11-10)
+
+Two independent API containers shared the same Compose Redis service. A manual HTTP run sent 200
+`POST /api/auth/login` requests, split evenly between the two API processes. Each request used a
+unique synthetic account and invalid credentials, so a `401` indicates that it passed the
+login-IP rate limiter and reached authentication.
+
+| Check | Result |
+|---|---|
+| API processes | 2 independent containers using `redis://redis:6379` |
+| Requests | 200 total; 100 sent to each API |
+| API 1 responses | 50 `401`, 50 `429` |
+| API 2 responses | 50 `401`, 50 `429` |
+| Total responses | 100 `401`, 100 `429` |
+| Shared Redis counter | 1 login-IP sorted-set key with 100 members |
+| Unexpected responses/errors | 0 |
+| Cleanup | Temporary API container and test Redis key removed |
+
+This was a manual local verification, not a checked-in automated test. It demonstrates shared
+rate-limit enforcement in the local Compose environment; it does not establish production
+deployment behaviour.
+
 ### Platform-wide evidence
 
 | Area | Evidence | Status |
 |---|---|---|
-| 🚦 **Redis rate limiting** | Implemented, tested and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`; results in the table above. No Redis/Valkey service is configured for the Render demo, and multi-instance production behaviour is not established | ✅ Verified in tests · demo not Redis-backed |
+| 🚦 **Redis rate limiting** | Implemented, tested and merged through [PR #9](https://github.com/aayushtiwari307/incident-intelligence-platform/pull/9) into `main`; results in the table above. A manual local Compose two-process check is documented above. No Redis/Valkey service is configured for the single-instance Render demo; production multi-instance behaviour is not established | ✅ Verified in tests · demo not Redis-backed |
 | 🧩 **Whole platform** | Windows run on 2026-10-25 at `d89f800`: clean `npm ci`, typecheck, lint, **537 unit/script tests**, **271 real-PostgreSQL integration tests (21 suites)**, production build. These counts are from that earlier commit and are not directly comparable to the API-only figures above | ✅ Verified locally |
 | 📦 **Container stack** | `smoke:stack` passed **20/20** checks against rebuilt images, including real-time authentication, delivery, tenant isolation and logout | ✅ Verified locally |
 | ☁️ **Demo deployment** | Render Free + Neon at https://incident-intelligence-free-demo.onrender.com; `/health/live` and `/health/ready` return OK | ✅ Live runtime verified |
