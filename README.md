@@ -1,7 +1,5 @@
 <div align="center">
 
-<img alt="" width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=150&color=0:FFB224,100:E0234E&section=header">
-
 # Incident Intelligence Platform
 
 **A multi-tenant incident operations platform that turns raw alerts into context-rich, auditable incidents.**
@@ -584,7 +582,5 @@ Released under the [MIT License](LICENSE). Third-party notices are in [`THIRD_PA
 <div align="center">
 
 <sub>Built by <a href="https://github.com/aayushtiwari307">Aayush Tiwari</a> · Zero budget, zero hand-waving.</sub>
-
-<img alt="" width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=120&color=0:E0234E,100:FFB224&section=footer">
 
 </div>
