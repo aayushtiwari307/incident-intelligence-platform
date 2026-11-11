@@ -10,7 +10,9 @@ RUN npm ci --no-audit --no-fund
 FROM dependencies AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:3001
+ARG NEXT_PUBLIC_REALTIME_ENABLED=false
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_REALTIME_ENABLED=${NEXT_PUBLIC_REALTIME_ENABLED}
 COPY . .
 RUN npm run build -w @platform/shared && npm run build -w @platform/web
 

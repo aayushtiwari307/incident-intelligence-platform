@@ -14,7 +14,7 @@ export interface RealtimeSubscriber {
 
 const MIN_RECOVERY_DELAY_MS = 5_000;
 const MAX_RECOVERY_DELAY_MS = 60_000;
-const REALTIME_ENABLED = process.env.NEXT_PUBLIC_REALTIME_ENABLED !== "false";
+const REALTIME_ENABLED = process.env.NEXT_PUBLIC_REALTIME_ENABLED === "true";
 
 /**
  * Keeps one live connection for the signed-in user's active organization and reports its status. The connection is
