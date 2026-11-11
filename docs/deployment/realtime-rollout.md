@@ -1,17 +1,17 @@
 # Realtime rollout checklist
 
-**Current state (2026-10-24): implemented in source; production configuration and public acceptance are unverified in this review. Keep realtime disabled until each step below is complete.**
+**Current repository state (2026-11-11): real-time is implemented but disabled in the Render configuration while acceptance remains incomplete. This change takes effect on the next deployment; an already-running Render instance is unchanged until redeployed.**
 
 ## Configuration
 
 1. Confirm the application’s normal `DATABASE_URL` works for ordinary queries/migrations. Do not change it for realtime.
 2. In the deployment provider's private environment settings, set `REALTIME_DATABASE_URL` to the direct PostgreSQL endpoint for the intended database (not a pooler hostname). Never paste this value into source control, tickets, screenshots, chat or logs.
-3. Set `REALTIME_ENABLED=true` only after the dedicated direct URL is set. The API configuration rejects an enabled listener without this URL and rejects obvious `pooler` hostnames. A string check cannot prove every provider-specific endpoint is direct, so verify it in the database provider's dashboard.
-4. Redeploy through the normal owner-controlled release process and confirm startup/health logs contain no connection string. This assistant did not change deployment settings or deploy this snapshot.
+3. Keep real-time disabled by default. Set `REALTIME_ENABLED=true` only after the dedicated direct URL is configured and the acceptance checks below pass. Set `NEXT_PUBLIC_REALTIME_ENABLED=true` at Next.js build time as well; the API and browser flags must agree. Compose passes the API setting into the frontend build automatically. The API rejects an enabled listener without the dedicated URL and rejects obvious `pooler` hostnames. Verify the endpoint in the database provider's dashboard.
+4. Redeploy through the normal owner-controlled release process. Check startup logs for listener status without exposing connection strings. `/health/ready` verifies the normal database connection only; it does not prove the real-time listener is connected. Use the authenticated Socket.IO smoke script and acceptance checks below.
 
 ## Acceptance
 
-- [ ] Health endpoints report ready after startup; ordinary incident CRUD and migrations still use the normal query pool.
+- [ ] `/health/ready` reports normal database readiness; ordinary incident CRUD and migrations still use the normal query pool. Verify real-time listener connectivity separately.
 - [ ] Two authenticated users in the **same** organization see a new incident event without refreshing.
 - [ ] A different tenant sees no other tenant's event.
 - [ ] After network disruption or free-tier sleep, reconnect succeeds, the listener's existing exponential retry backoff is observed, and the client resyncs safely without duplicated visible events.

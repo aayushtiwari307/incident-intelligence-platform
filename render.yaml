@@ -21,12 +21,12 @@ services:
       - key: AI_DAILY_REQUEST_LIMIT
         value: "20"
       - key: REALTIME_ENABLED
-        value: "true"
+        value: "false"
       - key: REALTIME_DATABASE_URL
         sync: false
       # Next.js inlines this flag into the browser bundle during the Docker build.
       - key: NEXT_PUBLIC_REALTIME_ENABLED
-        value: "true"
+        value: "false"
       - key: MIGRATE_ON_START
         value: check
       - key: LOG_LEVEL

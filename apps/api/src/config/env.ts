@@ -62,7 +62,7 @@ const envSchema = z.object({
   API_HOST: z.string().min(1).max(255).optional(),
   API_PORT: envInt(1, 65535).optional(),
   DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)),
-  // Optional dedicated session connection for LISTEN/NOTIFY; defaults to DATABASE_URL.
+  // Dedicated direct PostgreSQL connection for LISTEN/NOTIFY; required when REALTIME_ENABLED=true.
   REALTIME_DATABASE_URL: z.string().superRefine(urlWithProtocols(["postgres:", "postgresql:"], true)).optional(),
   // Optional Redis backend for distributed rate limiting. The job queue and real-time layer remain PostgreSQL-backed.
   REDIS_URL: z.string().superRefine(urlWithProtocols(["redis:", "rediss:"], false)).optional(),
